@@ -1,0 +1,8 @@
+SBIN,Value,comparator,1W,1D,4H,1H,30m,15m,5m,1m,Lookback
+RSI,55,>,,,,,y,,y,y,5
+MACD,"12,26,9",,,,,,y,,y,y,
+VWAP,1%,>,,,,,y,,y,,5
+EMA,"5, 20",,,,,,y,,y,y,5
+ADX,25,>,,,,,y,,,,5
+ATR,"5, 20",>,,,,,y,,,,
+OBV,5,,,,,,y,,,,

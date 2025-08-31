@@ -1,0 +1,45 @@
+1. logger.py check 7 days of backup- done
+2. config - in both files, ensrur e prpoer try except and file contents...
+3. pass proper logger to all modules...
+4. can validate the config parser with a validtaro if time permits
+5. in getting vix data check the request wait times...
+6. in vix data check whether ho use spy close or open 
+7. replaced the vix with nifty and sbin dadta - will coma back and visti
+8. what is the use of meta... it has one extra symbol?
+9. check ordrer id reterival in place_market_entry_with_bracket
+10. include timeout parameter in the 
+11. load state in order manager not using for pos_qty = pos_symbols.get(sumbols, o) as default
+12. create a separate fucntion to  create the boxes... all premarket checks..
+13. in the main module exception in getting vix used continu inetsf of fall back 20
+14. include skip paramerter
+15. scalping should exit intraday
+16. include dynamic settings
+17. incldue hhll strucrue
+18. look how to pass only the required number of bars in getting data...
+19. check drawdown value
+20. in settings file for obv there is lots of text have to give sepatare,
+21. in ta settings file parsing obv as float - check
+22. assumed the same foramt in the settings as in the example
+23. OBV not included
+24. vwap calculaiton - intraday vwap right?
+25. in market data include the periods
+26. Error 321, reqId 16: Error validating request.-'bK' : cause - Historical data request for durations longer than 52 weeks must be made in years., contract: Stock(symbol='SBIN', exchange='NSE', currency='INR')
+27. in marketdadta py 54 weeks has been givena s inpus..
+28. include skip, skip parameters..
+29. dynamic stop loss not impleemntd...
+30. hedge stop loss not implemented...
+31. check config file input types..
+32. check the order id issue in monitor fil and attach...
+33. qty is computed as zero...
+34. vix is not added in backtest module
+35. trade.json sometime has issues
+36. rounded in atr_baes_sl
+37. have to place brackert order
+38. vix is alwyas form the higher timefraem
+39. rule fo sixteen made alsway true
+40. for backtesing fully sending all the data frame instead of slices
+41. max look back in scalipin backes mtf, ltf conditoin sis50
+42. seed minutes in subscribe marekt data should change..
+43. after timewouts, restarts, all the modules should reliably connect back...
+44. check wheter ltp is crossed... not 1 m bar...
+45. backetest timeframe has to be changed based on the indicator time settins...

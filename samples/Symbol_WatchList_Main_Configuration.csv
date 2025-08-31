@@ -1,0 +1,4 @@
+[Symbol],Hi to Lo TF,HHLL,Entry Decision,Mode,Total Gain,Each Gain,Volatility,Volume Confirm,Max Draw down,Exit,SL,TP
+APPL,"30m, 5m, 1m",3,Pullback,Scalping,~0.28% ? 0.70%,~0.09%/ 0.23%,-0.333333333,H,1%,E1,0.5,1.5
+NVDA,"30m, 5m, 1m",3,Breakout,Swing,~0.57% ? 1.43%,0.15% ? 0.40%,-0.333333333,L,2%,E2,1.5,5
+TSLA,"30m, 5m, 1m",3,Both,scapling,~0.57% ? 1.43%,0.15% ? 0.40%,-0.333333333,L,1%,E3,2.5,10
