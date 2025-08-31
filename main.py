@@ -74,11 +74,6 @@ trading_units = config_dict["trading_units"]
 vix_threshold = config_dict["vix_threshold"]
 vix_reduction_factor = config_dict["vix_reduction_factor"]
 skip_on_high_vix = config_dict["skip_on_high_vix"]
-exit_method = config_dict["exit_method"].upper()
-exit_atr_k_sl = config_dict["exit_atr_k_sl"]
-exit_atr_k_tp = config_dict["exit_atr_k_tp"]
-exit_fixed_sl_pct = config_dict["exit_fixed_sl_pct"]
-exit_fixed_tp_pct = config_dict["exit_fixed_tp_pct"]
 test_run = config_dict["test_run"]
 
 trade_time_out_secs = config_dict["trade_time_out_secs"]
@@ -193,12 +188,12 @@ async def process_trading_signals(
     vix_threshold,
     vix_reduction_factor,
     skip_on_high_vix,
-    exit_method,
-    exit_fixed_sl_pct,
-    exit_fixed_tp_pct,
-    exit_atr_k_sl,
-    exit_atr_k_tp,
+
 ):
+    exit_method = watchlist_main_settings[symbol]['Exit']
+    exit_sl_input = watchlist_main_settings[symbol]['SL']
+    exit_tp_input = watchlist_main_settings[symbol]['TP']
+    
     okHTF = check_HTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df_HTF, logger)
     if not okHTF:
         logger.info(f"⏸️ HTF conditions not satisfied for {symbol}")
@@ -228,20 +223,20 @@ async def process_trading_signals(
         logger.info(f"⚠️ Qty computed as 0 for {symbol}")
         return False
 
-    if exit_method == "FIXED":
-        sl_price, tp_price = compute_fixed_sl_tp(last_price, exit_fixed_sl_pct, exit_fixed_tp_pct)
-    elif exit_method == "ATR":
+    if exit_method == "E1":
+        sl_price, tp_price = compute_fixed_sl_tp(last_price, exit_sl_input, exit_tp_input)
+    elif exit_method == "E2":
         try:
             atr_val_df = calculate_atr(df_LTF, max_look_back * 2)
             atr_val = float(atr_val_df.iloc[-1])
         except Exception:
             atr_val = None
         if atr_val is not None:
-            sl_price, tp_price = compute_atr_sl_tp(last_price, atr_val, exit_atr_k_sl, exit_atr_k_tp)
+            sl_price, tp_price = compute_atr_sl_tp(last_price, atr_val, exit_sl_input, exit_tp_input)
         else:
-            sl_price, tp_price = compute_fixed_sl_tp(last_price, exit_fixed_sl_pct, exit_fixed_tp_pct)
+            sl_price, tp_price = compute_fixed_sl_tp(last_price, exit_sl_input, exit_tp_input)
     else:
-        sl_price, tp_price = compute_fixed_sl_tp(last_price, exit_fixed_sl_pct, exit_fixed_tp_pct)
+        sl_price, tp_price = compute_fixed_sl_tp(last_price, exit_sl_input, exit_tp_input)
 
     contract = None
     if market_data:
@@ -361,7 +356,7 @@ async def run_live_mode(ib_connector):
         print(contract)
         subscribed = await streaming_data.subscribe(contract)
         if subscribed:
-            print("kambilika kalapi subscribed")
+            logger.info("✅ Streaming data subscribed 📡")
             callback = functools.partial(
                 on_1min_bar,
                 market_data=streaming_data,
@@ -373,9 +368,10 @@ async def run_live_mode(ib_connector):
             )
             streaming_data.on_bar(symbol, '1 min', callback)
         else: 
-            print("pimbilika pilapi not subscribed")
+            logger.info("⚠️ Streaming data not subscribed 📭")
 
-    logger.info("Streaming subscriptions active. Awaiting bars...")
+
+    logger.info("🚀 Streaming subscriptions active. 📊 Awaiting bars...")
 
     try:
         while True:

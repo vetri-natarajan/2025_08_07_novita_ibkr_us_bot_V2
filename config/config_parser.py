@@ -67,12 +67,6 @@ def get_config_inputs():
         trade_time_out_secs = int(conf["TRADING"]["trade_time_out_secs"])
         auto_trade_save_secs = int(conf["TRADING"]["auto_trade_save_secs"])
         
-        # --- EXIT ---
-        exit_method = conf["EXIT"]["exit_method"].strip().upper()
-        exit_atr_k_sl = float(conf["EXIT"]["atr_k_sl"])
-        exit_atr_k_tp = float(conf["EXIT"]["atr_k_tp"])
-        exit_fixed_sl_pct = float(conf["EXIT"]["fixed_sl_pct"])/100
-        exit_fixed_tp_pct = float(conf["EXIT"]["fixed_tp_pct"])/100
 
         # --- LOGGING ---
         log_level = conf["LOGGING"]["log_level"].upper()
@@ -114,11 +108,6 @@ def get_config_inputs():
             "test_run": test_run,
             "trade_time_out_secs" : trade_time_out_secs,
             "auto_trade_save_secs" : auto_trade_save_secs,
-            "exit_method": exit_method,
-            "exit_atr_k_sl": exit_atr_k_sl,
-            "exit_atr_k_tp": exit_atr_k_tp,
-            "exit_fixed_sl_pct": exit_fixed_sl_pct,
-            "exit_fixed_tp_pct": exit_fixed_tp_pct,
             "log_level": log_level,
             "log_file": log_file,
             "config_directory": config_directory,

@@ -203,6 +203,15 @@ class BacktestEngine:
         #for i, symbol in enumerate(tqdm(symbol_list, desc="Backtesting symbols"), 1):
         for i, symbol in enumerate(symbol_list):
             self.logger.info(f"🔄 Processing symbol {i}/{len(symbol_list)}: {symbol}")
+            exit_method = watchlist_main_settings[symbol]['Exit']
+            exit_sl_input = watchlist_main_settings[symbol]['SL']
+            exit_tp_input = watchlist_main_settings[symbol]['TP']
+            
+            '''
+            print('==========================================================')
+            print(exit_method, exit_sl_input, exit_tp_input)
+            '''
+            
             start_time = self.data_fetcher.get_start_time(end_time, duration_value, duration_unit)
             if start_time.tzinfo is None:
                 start_time = tz.localize(start_time)
@@ -240,6 +249,8 @@ class BacktestEngine:
             unique_days = df_LTF.index.normalize().unique()
             self.logger.info(f"📅 Backtesting {symbol} for {len(unique_days)} trading days")
             for current_day in tqdm(unique_days, desc=f"Days for {symbol}", position=1, leave=False):
+                self.logger.info(f'\n📅 Current day ==> {current_day}')
+
                 passed, reason = self.premarket.run_checks_for_day(current_day.date())
                
                 if not any(d[0] == current_day.date() for d in daily_checks):
@@ -251,11 +262,21 @@ class BacktestEngine:
                 day_end = current_day + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
                 df_LTF_day = df_LTF.loc[(df_LTF.index >= day_start) & (df_LTF.index <= day_end)]
                 for idx in tqdm(range(len(df_LTF_day)), desc=f"Processing bars {symbol} {current_day.date()}", position=2, leave=False):
+                    
                     df_LTF_slice = df_LTF_day.iloc[:idx + 1]
                     current_time = df_LTF_slice.index[-1]
                     df_HTF_slice = df_HTF.loc[:current_time]
                     df_MTF_slice = df_MTF.loc[:current_time]
-                    
+
+                    try:
+                        self.logger.info(
+                            f"df_HTF_slice --> {df_HTF_slice[:-1]} | "
+                            f"df_MTF_slice --> {df_MTF_slice[:-1]} | "
+                            f"df_LTF_slice --> {df_LTF_slice[:-1]}"
+                        )
+                    except Exception as e:
+                        self.logger.info(f"Exception: {e}")
+                        
                     ''' 
                     print("df_HTF_slice start==>", df_HTF_slice.head(1))
                     print("df_HTF_slice end====>", df_HTF_slice.tail(1))
@@ -295,12 +316,12 @@ class BacktestEngine:
                         )
                         if qty <= 0:
                             continue
-                        exit_method = self.cfg.get("exit_method", "FIXED").upper()
-                        if exit_method == "FIXED":
+                        
+                        if exit_method == "E1":
                             sl_price, tp_price = compute_fixed_sl_tp(
                                 last_price,
-                                sl_pct=float(self.cfg.get("exit_fixed_sl_pct", 0.01)),
-                                tp_pct=float(self.cfg.get("exit_fixed_tp_pct", 0.02))
+                                sl_pct=exit_sl_input,
+                                tp_pct=exit_tp_input
                             )
                         else:  # ATR
                             try:
@@ -311,14 +332,14 @@ class BacktestEngine:
                                 sl_price, tp_price = compute_atr_sl_tp(
                                     last_price,
                                     atr_val,
-                                    k_sl=float(self.cfg.get("exit_atr_k_sl", 1)),
-                                    k_tp=float(self.cfg.get("exit_atr_k_tp", 2)),
+                                    k_sl=exit_sl_input,
+                                    k_tp=exit_tp_input
                                 )
                             else:
                                 sl_price, tp_price = compute_fixed_sl_tp(
                                     last_price,
-                                    sl_pct=float(self.cfg.get("exit_fixed_sl_pct", 0.01)),
-                                    tp_pct=float(self.cfg.get("exit_fixed_tp_pct", 0.02))
+                                    sl_pct=exit_sl_input,
+                                    tp_pct=exit_tp_input
                                 )
                         entry_time = current_time
                         self.enter_trade(symbol, last_price, qty, sl_price, tp_price, sig, entry_time, side="BUY")

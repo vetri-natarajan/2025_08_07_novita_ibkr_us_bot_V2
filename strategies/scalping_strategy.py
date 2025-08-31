@@ -134,10 +134,10 @@ def check_technical_confluence(timeframe, df_TF, ta_settings, main_settings, log
             return False
         df_obv = df_TF
         obv = calculate_obv(df_obv)
-        obv_rising = ((obv.iloc[-1] - obv.iloc[-6]) / 5) > 0
+        obv_rising = ((obv.iloc[-1] - obv.iloc[-obv_settings -1]) / 5) > 0
         logger.info(f"📈 OBV rising: {obv_rising}")
         if not obv_rising:
-            logger.info(f"⚠️ OBV not rising over the last 6 periods, skipping this signal ❌")
+            logger.info(f"⚠️ OBV not rising over the last {obv_settings} periods, skipping this signal ❌")
             return False
 
             
@@ -183,7 +183,7 @@ def check_HTF_conditions(symbol, main_settings, ta_settings, df_HTF: pd.DataFram
     #<========================================================================>
     # 3. Total Gains
     
-    if not gains.sum() >= 10:
+    if not total_gain_limits[0] < gains.sum() < total_gain_limits[1]:
         logger.info(f"❌ HTF: Toatl Gains {each_gain_limits[0]} condition not satisfied")
         return False
         

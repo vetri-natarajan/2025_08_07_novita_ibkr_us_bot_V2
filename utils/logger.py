@@ -34,7 +34,7 @@ def initialize_logger(log_directory, logger_name, log_level=logging.INFO,  mode=
     logger.addHandler(file_handler)
     # Add console handler only if mode is not 'backtest'
     print("mode in logger===>", mode)
-    if mode != 'BACKTEST':
+    if mode != 'BACKTEST' or True:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(log_level)
         console_handler.setFormatter(formatter)
