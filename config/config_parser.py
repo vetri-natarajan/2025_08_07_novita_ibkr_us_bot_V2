@@ -33,23 +33,23 @@ def get_config_inputs():
         conf.read(config_path)
 
         # --- SCRIP ---
+        vix_symbol = conf["SCRIP"]["vix_symbol"].upper()
+        spx_symbol = conf["SCRIP"]["spx_symbol"].upper()
         exchange = conf["SCRIP"]["exchange"].replace('"', '').strip()
         currency = conf["SCRIP"]["currency"].replace('"', '').strip()
+        
 
         # --- RESTART ---
         read_restart = conf["RESTART"]["read_restart"].upper()
         auto_restart = conf["RESTART"]["auto_restart"].upper()
-
-        # --- LOGS ---
-        log_directory = conf["LOGS"]["log_directory"]
+        
 
         # --- IBKR ---
         ibkr_host = conf["IBKR"]["host"]
         ibkr_port = int(conf["IBKR"]["port"])
         ibkr_client_id = int(conf["IBKR"]["client_id"])
         account_type = conf["IBKR"]["live_or_paper"].upper()
-        vix_symbol = conf["IBKR"]["vix_symbol"].upper()
-        spx_symbol = conf["IBKR"]["spx_symbol"].upper()
+
 
         # --- TRADING ---
         run_mode = conf["TRADING"]["run_mode"].upper()
@@ -69,6 +69,7 @@ def get_config_inputs():
         
 
         # --- LOGGING ---
+        log_directory = conf["LOGGING"]["log_directory"]
         log_level = conf["LOGGING"]["log_level"].upper()
         log_file = conf["LOGGING"]["log_file"]
         config_directory = conf["LOGGING"]["config_directory"]

@@ -10,7 +10,9 @@ from ib_async import IB, Contract, util
 TF_MINUTES = {
     '1 min': 1,
     '5 mins': 5,
-    '30 mins': 30
+    '30 mins': 30, 
+    '1 day': 1,
+    '1 week': 1
 }
 
 class StreamingMarketData:

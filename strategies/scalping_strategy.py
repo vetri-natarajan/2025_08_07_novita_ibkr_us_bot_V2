@@ -78,9 +78,10 @@ def check_technical_confluence(timeframe, df_TF, ta_settings, main_settings, log
         vwap = calculate_vwap(df_vwap)
         vwap_last_value = vwap.iloc[-1]
         vwap_filter = vwap_last_value* (1+(vwap_threshold/100))
-        logger.info(f"📊 VWAP last value {vwap_last_value}")    
-        if not vwap_last_value > df_vwap['close'].iloc[-1] > vwap_filter:
-            logger.info(f"⚠️ VWAP {vwap_last_value} is not greater than vwap_filter {vwap_filter}, skipping this signal ❌")
+        last_close = df_vwap['close'].iloc[-1]
+        logger.info(f"📊 Last CLose last value {last_close} VWAP_filter {vwap_filter}")    
+        if not last_close > vwap_filter:
+            logger.info(f"⚠️ Close last value {last_close} is not greater than vwap_filter {vwap_filter}, skipping this signal ❌")
             return False
     
     if check_ema:
