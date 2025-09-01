@@ -126,7 +126,7 @@ class HistoricalDataFetcher:
 
         return df
 
-    async def fetch_multiple_timeframes(self, symbol, start_time, end_time, save=True, load=True):
+    async def fetch_multiple_timeframes(self, symbol, start_time, end_time, save=False, load=False):
         timeframes = self.watchlist_main_settings[symbol]['Parsed TF']
         dfs = {}
         for tf in timeframes:

@@ -270,9 +270,9 @@ class BacktestEngine:
 
                     try:
                         self.logger.info(
-                            f"df_HTF_slice --> {df_HTF_slice[:-1]} | "
-                            f"df_MTF_slice --> {df_MTF_slice[:-1]} | "
-                            f"df_LTF_slice --> {df_LTF_slice[:-1]}"
+                            f"df_HTF_slice --> {df_HTF_slice} | "
+                            f"df_MTF_slice --> {df_MTF_slice} | "
+                            f"df_LTF_slice --> {df_LTF_slice}"
                         )
                     except Exception as e:
                         self.logger.info(f"Exception: {e}")

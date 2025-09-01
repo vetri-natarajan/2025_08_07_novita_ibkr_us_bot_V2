@@ -49,6 +49,7 @@ def check_technical_confluence(timeframe, df_TF, ta_settings, main_settings, log
         if not rsi_last_value > rsi_threshold:
             logger.info(f"⚠️ RSI value {rsi_last_value} is not above the threshold {rsi_threshold}, skipping this signal ❌")
             return False
+        
     
     if check_macd:
         macd_settings = ta_settings["MACD"]['parsed_value']
@@ -76,9 +77,10 @@ def check_technical_confluence(timeframe, df_TF, ta_settings, main_settings, log
         df_vwap = df_TF
         vwap = calculate_vwap(df_vwap)
         vwap_last_value = vwap.iloc[-1]
+        vwap_filter = vwap_last_value* (1+(vwap_threshold/100))
         logger.info(f"📊 VWAP last value {vwap_last_value}")    
-        if not vwap_last_value > vwap_threshold:
-            logger.info(f"⚠️ VWAP {vwap_last_value} is not greater than threshold {vwap_threshold}, skipping this signal ❌")
+        if not vwap_last_value > df_vwap['close'].iloc[-1] > vwap_filter:
+            logger.info(f"⚠️ VWAP {vwap_last_value} is not greater than vwap_filter {vwap_filter}, skipping this signal ❌")
             return False
     
     if check_ema:
@@ -160,6 +162,7 @@ def check_HTF_conditions(symbol, main_settings, ta_settings, df_HTF: pd.DataFram
         return False
     #print(df_HTF)
     lastN = df_HTF.iloc[-HH_LL_bars-1:-1].copy()
+    logger.info(f'HTF lastN====>\n {lastN}')
    # print(type(lastN))
     opens = lastN['open'].astype(float)
     highs = lastN['high'].astype(float)
@@ -174,10 +177,10 @@ def check_HTF_conditions(symbol, main_settings, ta_settings, df_HTF: pd.DataFram
 
     #<========================================================================>
     # 2. Individual Gains
-    gains = (closes - opens)/(opens + EPS)
+    gains = (closes - opens)*100/(opens + EPS)
     
     if not all((gains > each_gain_limits[0]) & (gains < each_gain_limits[1])):
-        logger.info(f"❌ HTF: Gains not in range {each_gain_limits[0]} to {each_gain_limits[1]}")
+        logger.info(f"❌ HTF: Gains not in range {each_gain_limits[0]} to {each_gain_limits[1]} === gains[-1] ===> {gains.iloc[-1:]}")
         return False
 
     #<========================================================================>
@@ -228,6 +231,7 @@ def check_MTF_conditions(symbol, main_settings, ta_settings,  df_MTF: pd.DataFra
         raise ValueError("❌ MTF Higher and medium time frame mismatch detected 🚩")
         
     lastN = df_MTF.iloc[-(mtf_look_back + 1): -1].copy()
+    logger.info(f'MTF lastN====>\n {lastN}')
     opens = lastN['open'].astype(float)
     closes = lastN['close'].astype(float)
     highs = lastN['high'].astype(float)
@@ -296,9 +300,11 @@ def check_LTF_conditions(symbol, main_settings, ta_settings, df_LTF: pd.DataFram
     
     HH_LL_bars = int(main_settings[symbol]['HHLL'])
     lastNHTF = df_HTF.iloc[-HH_LL_bars-1:-1].copy()
+    logger.info(f'LTF lastNHTF ====>\n {lastNHTF}')
     #print(lastNHTF)
     breakout_level = np.max(lastNHTF['high'])   
     last = df_LTF.iloc[-1]
+    logger.info(f'LTF last====>\n {last}')
     last_close = last['close']
     last_vol = last['volume']
     price = last['close']
