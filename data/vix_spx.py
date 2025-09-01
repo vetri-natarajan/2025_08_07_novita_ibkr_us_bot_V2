@@ -19,7 +19,7 @@ async def get_vix(ib, exchange, currency, vix_symbol, logger):
     try:
         ticker = ib.reqMktData(vix_contract, snapshot=True, regulatorySnapshot=False)
         logger.info("🛰️ Requested market data for VIX contract.")
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(1)
         logger.info("⏲️ Waited 0.5s for VIX market data response.")
 
         value = None
@@ -47,10 +47,10 @@ async def get_vix(ib, exchange, currency, vix_symbol, logger):
 
 async def get_spx(ib, exchange, currency, spx_symbol, logger):
     logger.info("🔍 Initiating SPX data fetch: exchange=%s, currency=%s", exchange, currency)
-    spy_contract = Index(symbol=spx_symbol, exchange=exchange, currency=currency)
+    spx_contract = Index(symbol=spx_symbol, exchange=exchange, currency=currency)
     
     try:
-        ticker = ib.reqMktData(spy_contract, snapshot=True, regulatorySnapshot=False)
+        ticker = ib.reqMktData(spx_contract, snapshot=True, regulatorySnapshot=False)
         logger.info("🛰️ Requested market data for SPX contract.")
         await asyncio.sleep(0.5)
         logger.info("⏲️ Waited 0.5s for SPX market data response.")
@@ -65,7 +65,7 @@ async def get_spx(ib, exchange, currency, spx_symbol, logger):
         else:
             logger.warning("⚠️ Neither last nor close price available for SPX ticker.")
 
-        ib.cancelMktData(spy_contract)
+        ib.cancelMktData(spx_contract)
         logger.info("🛑 Cancelled SPX market data subscription.")
 
         if value is None:
