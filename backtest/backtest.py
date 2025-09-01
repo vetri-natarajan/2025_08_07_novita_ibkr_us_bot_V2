@@ -5,7 +5,7 @@ import pytz
 import csv
 from tqdm import tqdm
 import sys
-
+import logging
 # Import your strategy, indicators, and helpers
 from strategies.scalping_strategy import check_HTF_conditions, check_MTF_conditions, check_LTF_conditions
 from execution.position_sizer import compute_qty
@@ -48,7 +48,7 @@ class PreMarketChecksBacktest:
             self.logger.warning(f"⚠️ {msg}")
             return False, msg
         expected_daily_move = spx_quote / 16
-        
+
         if vix_val/1000 > expected_daily_move:
             msg = f"Rule of 16 failed (VIX too high) on {date}"
             self.logger.warning(f"⚠️ {msg}")
@@ -94,7 +94,6 @@ class PreMarketChecksBacktest:
     def get_vix(self, date):
         return self.get_close_price(self.vix_df, date)
 
-
 class BacktestEngine:
     def __init__(self, watchlist, account_value, data_fetcher, config_dict, premarket, logger, commission=0.0005):
         self.watchlist = watchlist
@@ -106,7 +105,24 @@ class BacktestEngine:
         self.config_dict = config_dict
         self.premarket = premarket
         self.logger = logger
+        self.backtest_file_handler = None  # For additional backtest log file handler
         self.logger.info("🛠️ Initialized BacktestEngine")
+
+    def start_backtest_logging(self, backtest_log_path):
+        if self.backtest_file_handler is None:
+            backtest_handler = logging.FileHandler(backtest_log_path)
+            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+            backtest_handler.setFormatter(formatter)
+            self.logger.addHandler(backtest_handler)
+            self.backtest_file_handler = backtest_handler
+            self.logger.info(f"Backtest logging started in {backtest_log_path}")
+
+    def stop_backtest_logging(self):
+        if self.backtest_file_handler:
+            self.logger.removeHandler(self.backtest_file_handler)
+            self.backtest_file_handler.close()
+            self.backtest_file_handler = None
+            self.logger.info("Backtest logging stopped")
 
     def compute_qty(self, price):
         units = int(self.cfg.get("trading_units", 5))
@@ -117,7 +133,7 @@ class BacktestEngine:
         if symbol in self.positions and self.positions[symbol]['qty'] != 0:
             self.logger.info(f"Already have active position on {symbol}, skipping entry")
             return
-        
+
         self.positions[symbol] = {
             'entry_price': price,
             'qty': qty,
@@ -146,7 +162,7 @@ class BacktestEngine:
     def exit_trade(self, symbol, price, time):
         if symbol not in self.positions or self.positions[symbol]['qty'] == 0:
             return
-        
+
         pos = self.positions[symbol]
         qty = pos['qty']
         entry_price = pos['entry_price']
@@ -157,30 +173,25 @@ class BacktestEngine:
         pos['exit_time'] = time
         pos['pnl'] = net_pnl
         pos['qty'] = 0
-        
+
         for trade in self.trades:
             if trade['symbol'] == symbol and trade['pnl'] is None:
                 trade['exit_price'] = price
                 trade['exit_time'] = time
                 trade['pnl'] = net_pnl
-        
-        self.logger.info(f"Exited trade {symbol} qty {qty} at {price:.2f} time {time} P&L: {net_pnl:.2f}")
 
+        self.logger.info(f"Exited trade {symbol} qty {qty} at {price:.2f} time {time} P&L: {net_pnl:.2f}")
 
     def write_daily_checks_to_file(self, daily_checks, filename="daily_checks_report.csv", report_dir="backtest_reports"):
         if not os.path.exists(report_dir):
             os.makedirs(report_dir)
         filepath = os.path.join(report_dir, filename)
-
         with open(filepath, mode='w', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(["date", "conditions_met", "message"])
             for date, passed, reason in daily_checks:
                 writer.writerow([date.strftime("%Y-%m-%d"), passed, reason])
-
         self.logger.info(f"Daily checks report saved to {filepath}")
-
-
 
     async def run_backtest(
         self,
@@ -194,55 +205,34 @@ class BacktestEngine:
         load_data=True
     ):
         config_directory = config_dict.get("config_directory", "")
+        # Start backtest logging to additional file
+        self.start_backtest_logging("backtest_reports/backtest_additional.log")
+
         self.logger.info("🚀 Starting backtest")
         if end_time is None:
             end_time = dt.datetime.now()
         tz = pytz.timezone(config_dict['trading_time_zone'])
-        
+
         daily_checks = []
-        #for i, symbol in enumerate(tqdm(symbol_list, desc="Backtesting symbols"), 1):
+        # for i, symbol in enumerate(tqdm(symbol_list, desc="Backtesting symbols"), 1):
         for i, symbol in enumerate(symbol_list):
             self.logger.info(f"🔄 Processing symbol {i}/{len(symbol_list)}: {symbol}")
             exit_method = watchlist_main_settings[symbol]['Exit']
             exit_sl_input = watchlist_main_settings[symbol]['SL']
             exit_tp_input = watchlist_main_settings[symbol]['TP']
-            
-            '''
-            print('==========================================================')
-            print(exit_method, exit_sl_input, exit_tp_input)
-            '''
-            
+
             start_time = self.data_fetcher.get_start_time(end_time, duration_value, duration_unit)
             if start_time.tzinfo is None:
                 start_time = tz.localize(start_time)
             if end_time.tzinfo is None:
                 end_time = tz.localize(end_time)
-                
+
             print(start_time, end_time)
             dfs, timeframes = await self.data_fetcher.fetch_multiple_timeframes(symbol, start_time, end_time, save=save_data, load=load_data)
-
             df_HTF = dfs.get(timeframes[0])
             df_MTF = dfs.get(timeframes[1])
             df_LTF = dfs.get(timeframes[2])
-            
-            
-            '''
-            print("dfs========>")
-            print(dfs)
-            
-            print("timeframes ===> ", timeframes)
-                      
-            
-            print("df_HTF start==>", df_HTF.head(1))
-            print("df_HTF end====>", df_HTF.tail(1))
-            
-            print("df_MTF start==>", df_MTF.head(1))
-            print("df_MTF end====>", df_MTF.tail(1))
-            
-            print("df_LTF start==>", df_LTF.head(1))
-            print("df_LTF end====>", df_LTF.tail(1))
-            '''
-            
+
             if df_LTF is None or df_LTF.empty or df_HTF is None or df_MTF is None:
                 self.logger.warning(f"⚠️ Skipping {symbol} due to missing data.")
                 continue
@@ -250,9 +240,8 @@ class BacktestEngine:
             self.logger.info(f"📅 Backtesting {symbol} for {len(unique_days)} trading days")
             for current_day in tqdm(unique_days, desc=f"Days for {symbol}", position=1, leave=False):
                 self.logger.info(f'\n📅 Current day ==> {current_day}')
-
                 passed, reason = self.premarket.run_checks_for_day(current_day.date())
-               
+
                 if not any(d[0] == current_day.date() for d in daily_checks):
                     daily_checks.append((current_day.date(), passed, reason))
                 if not passed:
@@ -262,12 +251,11 @@ class BacktestEngine:
                 day_end = current_day + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
                 df_LTF_day = df_LTF.loc[(df_LTF.index >= day_start) & (df_LTF.index <= day_end)]
                 for idx in tqdm(range(len(df_LTF_day)), desc=f"Processing bars {symbol} {current_day.date()}", position=2, leave=False):
-                    
+
                     df_LTF_slice = df_LTF_day.iloc[:idx + 1]
                     current_time = df_LTF_slice.index[-1]
                     df_HTF_slice = df_HTF.loc[:current_time]
                     df_MTF_slice = df_MTF.loc[:current_time]
-
                     try:
                         self.logger.info(
                             f"df_HTF_slice --> {df_HTF_slice} | "
@@ -276,24 +264,7 @@ class BacktestEngine:
                         )
                     except Exception as e:
                         self.logger.info(f"Exception: {e}")
-                        
-                    ''' 
-                    print("df_HTF_slice start==>", df_HTF_slice.head(1))
-                    print("df_HTF_slice end====>", df_HTF_slice.tail(1))
-                    
-                    print("df_MTF_slice start==>", df_MTF_slice.head(1))
-                    print("df_MTF_slice end====>", df_MTF_slice.tail(1))
-                    
-                    print("df_LTF_slice start==>", df_LTF_slice.head(1))
-                    print("df_LTF_slice end====>", df_LTF_slice.tail(1))
-                    
-                    print("df_HTF_slice==>", df_HTF_slice)
-                    print("df_MTF_slice==>", df_MTF_slice)
-                    print("df_LTF_slice==>", df_LTF_slice)
-                    '''
-                    
-                   
-                    
+
                     ta_settings, max_look_back = read_ta_settings(symbol, config_directory, self.logger)
                     okHTF = check_HTF_conditions(symbol, watchlist_main_settings, ta_settings, df_HTF_slice, self.logger)
                     okMTF = check_MTF_conditions(symbol, watchlist_main_settings, ta_settings, df_MTF_slice, self.logger)
@@ -316,7 +287,7 @@ class BacktestEngine:
                         )
                         if qty <= 0:
                             continue
-                        
+
                         if exit_method == "E1":
                             sl_price, tp_price = compute_fixed_sl_tp(
                                 last_price,
@@ -344,9 +315,13 @@ class BacktestEngine:
                         entry_time = current_time
                         self.enter_trade(symbol, last_price, qty, sl_price, tp_price, sig, entry_time, side="BUY")
             self.logger.info(f"Backtest complete for {symbol}")
+
         self.write_daily_checks_to_file(daily_checks)
         self.report_results()
         self.write_trades_to_file("backtest_reports")
+
+        # Stop backtest logging to additional file after backtest finishes
+        self.stop_backtest_logging()
 
     def report_results(self):
         total_trades = len(self.trades)
@@ -354,27 +329,26 @@ class BacktestEngine:
         losing_trades = [t for t in self.trades if t['pnl'] and t['pnl'] <= 0]
         total_pnl = sum(t['pnl'] for t in self.trades if t['pnl'] is not None)
         win_rate = len(winning_trades) / total_trades if total_trades > 0 else 0
-        
+
         self.logger.info("Backtest summary:")
         self.logger.info(f"Total trades: {total_trades}")
         self.logger.info(f"Winning trades: {len(winning_trades)}")
         self.logger.info(f"Losing trades: {len(losing_trades)}")
         self.logger.info(f"Win rate: {win_rate*100:.2f}%")
         self.logger.info(f"Net P&L: {total_pnl:.2f}")
-
         print("Backtest summary:")
         print(f"Total trades: {total_trades}")
         print(f"Winning trades: {len(winning_trades)}")
         print(f"Losing trades: {len(losing_trades)}")
         print(f"Win rate: {win_rate*100:.2f}%")
         print(f"Net P&L: {total_pnl:.2f}")
-        
+
     def write_trades_to_file(self, report_dir):
         if not os.path.exists(report_dir):
             os.makedirs(report_dir)
-        
+
         filepath = os.path.join(report_dir, "backtest_trades_report.csv")
-        
+
         cum_pnl = 0.0
         rows = []
         for trade in self.trades:
@@ -385,12 +359,12 @@ class BacktestEngine:
             side = 'long' if trade.get('side', 'BUY').upper() == 'BUY' else 'short'
             entry_dt = trade['entry_time']
             exit_dt = trade['exit_time'] or ''
-            
+
             entry_date = entry_dt.strftime('%Y-%m-%d') if isinstance(entry_dt, (dt.datetime, pd.Timestamp)) else ''
             entry_time = entry_dt.strftime('%H:%M:%S') if isinstance(entry_dt, (dt.datetime, pd.Timestamp)) else ''
             exit_date = exit_dt.strftime('%Y-%m-%d') if isinstance(exit_dt, (dt.datetime, pd.Timestamp)) else ''
             exit_time = exit_dt.strftime('%H:%M:%S') if isinstance(exit_dt, (dt.datetime, pd.Timestamp)) else ''
-            
+
             row = [
                 symbol,
                 side,
@@ -404,7 +378,7 @@ class BacktestEngine:
                 f"{cum_pnl:.4f}"
             ]
             rows.append(row)
-        
+
         with open(filepath, mode='w', newline='') as f:
             writer = csv.writer(f)
             header = [
@@ -421,5 +395,5 @@ class BacktestEngine:
             ]
             writer.writerow(header)
             writer.writerows(rows)
-        
+
         self.logger.info(f"Backtest trades report saved to {filepath}")
