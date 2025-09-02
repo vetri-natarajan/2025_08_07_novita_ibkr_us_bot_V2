@@ -1,10 +1,11 @@
 import asyncio
 import functools
 import logging
-from collections import defaultdict
+from collections import defaultdict, deque
 from typing import Dict, Callable, Optional, List, Tuple
 import pandas as pd
 from datetime import datetime, timezone
+from dataclasses import dataclass
 from ib_async import IB, Contract, util
 from concurrent.futures import ThreadPoolExecutor
 
@@ -21,6 +22,39 @@ MAX_TF_TO_LTF = {
     '30 mins': {'30 mins': 1, '5 mins': 6, '1 min': 30}
 }
 
+@dataclass
+class AggregatedBar:
+    time: pd.Timestamp
+    open_: float
+    high: float
+    low: float
+    close: float
+    volume: float
+
+class BarAggregator:
+    def __init__(self, timeframe_minutes: int, logger: logging.Logger):
+        self.tf = timeframe_minutes
+        self.logger = logger
+        self.bars = deque()  # Store incoming 1-min bars
+
+    def add_bar(self, bar: AggregatedBar) -> Optional[AggregatedBar]:
+        self.bars.append(bar)
+        if len(self.bars) == self.tf:
+            agg_bar = self.aggregate_bars(list(self.bars))
+            self.bars.clear()
+            self.logger.debug(f"Aggregated {self.tf}-minute bar at {agg_bar.time}")
+            return agg_bar
+        return None
+
+    def aggregate_bars(self, bars: List[AggregatedBar]) -> AggregatedBar:
+        open_ = bars[0].open_
+        high = max(b.high for b in bars)
+        low = min(b.low for b in bars)
+        close = bars[-1].close
+        volume = sum(b.volume for b in bars)
+        time = bars[-1].time  # End time of the aggregated bar
+        return AggregatedBar(time, open_, high, low, close, volume)
+
 class StreamingData:
     def __init__(self, ib: IB, logger: logging.Logger, buffer_limit: int = 1000):
         self.ib = ib
@@ -31,6 +65,7 @@ class StreamingData:
         self._subscriptions: Dict[str, Dict[str, dict]] = defaultdict(dict)  # symbol -> timeframe -> subscription info
         self._data_cache: Dict[str, Dict[str, pd.DataFrame]] = defaultdict(dict)  # symbol -> timeframe -> df
         self._callbacks: Dict[Tuple[str, str], List[Callable]] = defaultdict(list)
+        self._aggregators: Dict[Tuple[str, str], BarAggregator] = {}  # (symbol, timeframe) -> BarAggregator
         self.logger.info(f"🚀 StreamingData initialized with buffer limit {buffer_limit} bars.")
 
     async def seed_historical(self, contract: Contract, timeframe: str, max_tf: str, max_look_back: int) -> Optional[pd.DataFrame]:
@@ -42,16 +77,12 @@ class StreamingData:
             duration_str_value = int(duration_value / division_factor)
             if duration_str_value == 0 and timeframe == '1 day':
                 duration_str_value = 5
-            if duration_str_value == 0 and timeframe == '5 mins':
-                duration_str_value = 2                
             duration_str = f"{duration_str_value} W"
             self.logger.info(f"📅 Duration string set to {duration_str} (weekly)")
 
         elif max_tf.lower() == "30 mins":
             division_factor = MAX_TF_TO_LTF.get(max_tf).get(timeframe)
             duration_str_value = int(duration_value / division_factor)
-            if duration_str_value == 0 and timeframe == '5 mins':
-                duration_str_value = 2
             if duration_str_value == 0 and timeframe == '1 min':
                 duration_str_value = 2
             duration_str = f"{duration_str_value} D"
@@ -103,32 +134,40 @@ class StreamingData:
             if timeframe in self._subscriptions[symbol]:
                 self.logger.info(f"♻️ Already subscribed: {symbol} [{timeframe}]")
                 return True
-
-            self.logger.info(f"🌱 Starting subscription by seeding history for {symbol} [{timeframe}]")
+    
+            self.logger.info(f"🌱 Seeding historical data for {symbol} [{timeframe}]")
             df = await self.seed_historical(contract, timeframe, max_tf, max_look_back)
             if df is None:
                 df = pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
                 self.logger.warning(f"⚠️ Starting with empty data for {symbol} [{timeframe}] after failed seed")
-
+    
             self._data_cache[symbol][timeframe] = df
-
+    
             try:
-                bars = self.ib.reqRealTimeBars(contract, 5, "TRADES", useRTH=True)
-                bars.updateEvent += functools.partial(self._on_bar_update, symbol=symbol, timeframe=timeframe)
-                self._subscriptions[symbol][timeframe] = {'contract': contract, 'bars': bars}
-                self.logger.info(f"📡 Subscribed to {symbol} [{timeframe}] with real-time bars subscription")
+                if timeframe == '1 min':
+                    bars = self.ib.reqRealTimeBars(contract, 5, "TRADES", useRTH=True)
+                    bars.updateEvent += functools.partial(self._on_bar_update, symbol=symbol, timeframe='1 min')
+                    self._subscriptions[symbol]['1 min'] = {'contract': contract, 'bars': bars}
+                    self.logger.info(f"📡 Subscribed to real-time 1-min bars for {symbol}")
+                else:
+                    tf_minutes = TF_TO_MINUTES.get(timeframe)
+                    if tf_minutes is None:
+                        raise ValueError(f"Unsupported timeframe {timeframe} for aggregation")
+                    self._aggregators[(symbol, timeframe)] = BarAggregator(tf_minutes, self.logger)
+                    self._subscriptions[symbol][timeframe] = {'contract': contract, 'aggregator': self._aggregators[(symbol, timeframe)]}
+                    self.logger.info(f"Setup aggregator for {symbol} [{timeframe}]")
                 return True
             except Exception as e:
                 self.logger.error(f"❌ Failed to subscribe to {symbol} [{timeframe}]: {e}")
                 return False
 
+
     async def _on_bar_update(self, bars, hasNewBar, symbol, timeframe):
-        if not hasNewBar:
+        if not hasNewBar or timeframe != "1 min":
             return
 
         latest_bar = bars[-1]
-        bar_time = latest_bar.time  # Correct attribute 'time'
-
+        bar_time = latest_bar.time
         if isinstance(bar_time, int):
             bar_time = datetime.fromtimestamp(bar_time, timezone.utc)
         elif isinstance(bar_time, str):
@@ -137,19 +176,38 @@ class StreamingData:
             bar_time = bar_time.tz_localize(timezone.utc)
         bar_time = bar_time.replace(second=0, microsecond=0)
 
-        row = {
-            'open': latest_bar.open_,  # Correct attribute 'open_'
-            'high': latest_bar.high,
-            'low': latest_bar.low,
-            'close': latest_bar.close,
-            'volume': latest_bar.volume
-        }
+        base_bar = AggregatedBar(
+            time=bar_time,
+            open_=latest_bar.open_,
+            high=latest_bar.high,
+            low=latest_bar.low,
+            close=latest_bar.close,
+            volume=latest_bar.volume
+        )
 
+        # Update 1-min cache and callbacks directly
+        await self._update_cache_and_callbacks(symbol, "1 min", base_bar)
+
+        # Aggregate for higher timeframes and update if a new bar completes
+        for (sym, tf), aggregator in self._aggregators.items():
+            if sym != symbol:
+                continue
+            agg_bar = aggregator.add_bar(base_bar)
+            if agg_bar:
+                await self._update_cache_and_callbacks(symbol, tf, agg_bar)
+
+    async def _update_cache_and_callbacks(self, symbol: str, timeframe: str, agg_bar: AggregatedBar):
+        row = {
+            'open': agg_bar.open_,
+            'high': agg_bar.high,
+            'low': agg_bar.low,
+            'close': agg_bar.close,
+            'volume': agg_bar.volume
+        }
         df = self._data_cache.get(symbol, {}).get(timeframe)
         if df is None:
             df = pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
-
-        df_new = pd.DataFrame([row], index=[bar_time])
+        df_new = pd.DataFrame([row], index=[agg_bar.time])
         df = pd.concat([df, df_new])
         df = df[~df.index.duplicated(keep='last')]
 
@@ -158,7 +216,8 @@ class StreamingData:
             df = df.tail(self.buffer_limit)
 
         self._data_cache[symbol][timeframe] = df
-        self.logger.info(f"🆕 New {timeframe} bar for {symbol} at {bar_time}")
+        self.logger.info(f"🆕 New {timeframe} bar for {symbol} at {agg_bar.time}")
+
         await self._fire_callbacks(symbol, timeframe, df)
 
     async def _fire_callbacks(self, symbol: str, timeframe: str, df: pd.DataFrame):
