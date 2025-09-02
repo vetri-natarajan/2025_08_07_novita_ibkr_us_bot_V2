@@ -4,7 +4,7 @@ from logic.total_candle_gain import check_total_gain_limits
 from logic.max_drawdown import check_max_drawdown
 from logic.check_TA_confluence import check_technical_confluence
 
-def check_HTF_conditions(symbol, main_settings, ta_settings, df_HTF, logger):
+def check_HTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_HTF, logger):
     HH_LL_bars = int(main_settings[symbol]['HHLL'])
     each_gain_limits = main_settings[symbol]['Parsed Each Gain']
     total_gain_limits = main_settings[symbol]['Parsed Total Gain']

@@ -1,6 +1,6 @@
 import numpy as np
 from logic.check_TA_confluence import check_technical_confluence
-def check_MTF_conditions(symbol, main_settings, ta_settings, df_MTF, logger):
+def check_MTF_conditions(symbol, main_settings, ta_settings, max_look_back,  df_MTF, logger):
     if df_MTF is None:
         logger.info("❌ MTF : Dataframe is None or too short")
         return False

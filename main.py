@@ -265,9 +265,15 @@ async def run_live_mode(ib_connector):
             if not subscribed:
                 logger.warning(f"⚠️ Subscription failed for {symbol} {tf}")
                 continue
-            callback = functools.partial(on_bar_handler, symbol=symbol, timeframe=tf,
-                                         market_data=streaming_data, order_manager=order_manager,
-                                         cfg=config_dict, account_value=account_value, vix=vix, logger=logger)
+            callback = functools.partial(
+                        on_bar_handler,
+                        market_data=streaming_data,
+                        order_manager=order_manager,
+                        cfg=config_dict,
+                        account_value=account_value,
+                        vix=vix,
+                        logger=logger,
+                        )
             streaming_data.on_bar(symbol, tf, callback)
             logger.info(f"✅ Subscribed and set handler for {symbol} {tf}")
 

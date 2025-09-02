@@ -31,15 +31,15 @@ EPS = 1e-8
 
 
 
-def check_HTF_conditions(symbol, main_settings, ta_settings, df_HTF, logger):
-    return htf_check(symbol, main_settings, ta_settings, df_HTF, logger)
+def check_HTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_HTF, logger):
+    return htf_check(symbol, main_settings, ta_settings, max_look_back,  df_HTF, logger)
 
 
-def check_MTF_conditions(symbol, main_settings, ta_settings, df_MTF, logger):
-    return mtf_check(symbol, main_settings, ta_settings, df_MTF, logger)
+def check_MTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_MTF, logger):
+    return mtf_check(symbol, main_settings, ta_settings, max_look_back, df_MTF, logger)
 
 
-def check_LTF_conditions(symbol, main_settings, ta_settings, df_LTF, df_HTF, logger):
+def check_LTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_LTF, df_HTF, logger):
     if df_LTF is None:
         logger.info("❌ LTF : Dataframe is None or too short")
         return False
