@@ -1,3 +1,4 @@
 logs/
 backtest_reports/
 *.log
+*.parquet

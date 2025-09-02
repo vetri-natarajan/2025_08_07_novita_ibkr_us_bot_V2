@@ -15,11 +15,11 @@ from ib_async import Index, Stock
 async def get_vix(ib, exchange, currency, vix_symbol, logger):
     logger.info("🔍 Initiating VIX data fetch: exchange=%s, currency=%s", exchange, currency)
     vix_contract = Index(symbol=vix_symbol, exchange=exchange, currency=currency)
-    
+    logger.info(f"⏲️ vix contract ==> {vix_contract}.")
     try:
         ticker = ib.reqMktData(vix_contract, snapshot=True, regulatorySnapshot=False)
         logger.info("🛰️ Requested market data for VIX contract.")
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.5)
         logger.info("⏲️ Waited 0.5s for VIX market data response.")
 
         value = None

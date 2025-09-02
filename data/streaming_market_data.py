@@ -47,12 +47,19 @@ class StreamingData:
 
         if max_tf.lower() == "1 week":           
             division_factor = MAX_TF_TO_LTF.get(max_tf).get(timeframe)
-            duration_str = f"{int(duration_value/division_factor)} W"  # 📅 Weekly timeframe
+            duration_str_value = int(duration_value/division_factor)
+            if duration_str_value == 0 and timeframe == '1 day':
+                duration_str_value = 5
+            duration_str = f"{duration_str_value} W"  # 📅 Weekly timeframe
             self.logger.info(f"📅 Duration string set to {duration_str} (weekly)")
         
         elif max_tf.lower() == "30 mins":
             division_factor = MAX_TF_TO_LTF.get(max_tf).get(timeframe)
-            duration_str = f"{int(duration_value/division_factor)} D"  # ⏱️ Intraday timeframe
+            duration_str_value = int(duration_value/division_factor)
+            if duration_str_value == 0 and timeframe == '1 min':
+                duration_str_value = 2
+            duration_str = f"{duration_str_value} D"  # ⏱️ Intraday timeframe
+            
             self.logger.info(f"⏱️ Duration string set to {duration_str} (intraday)")
         
         else: 
@@ -91,12 +98,14 @@ class StreamingData:
         if not all(col in df.columns for col in required_cols):
             self.logger.error(f"❌ Missing required columns in historical data for {contract.symbol} [{timeframe}]")
             return None
-        
+        '''
         df = df[required_cols].copy()
         if len(df) > self.buffer_limit:
             self.logger.info(f"✂️ Truncating historical data to last {self.buffer_limit} bars for {contract.symbol} [{timeframe}]")
             df = df.tail(self.buffer_limit)
-        
+        '''
+        self.logger.info(f'df_timeframe ===> {timeframe}')
+        self.logger.info(df.tail)
         self.logger.info(f"✅ Seeded {len(df)} bars for {contract.symbol} [{timeframe}]")
         return df
 
@@ -117,7 +126,8 @@ class StreamingData:
             
             try:
                 bar_size_sec = TF_TO_MINUTES.get(timeframe, 1)*60
-                req_id = self.ib.reqRealTimeBars(contract, bar_size_sec, "TRADES", True, [])
+                self.logger.info(f"Contract in reqrealtimebars {contract} ")
+                req_id = self.ib.reqRealTimeBars(contract, 5, "TRADES", True, [])
                 self._subscriptions[symbol][timeframe] = {'contract': contract, 'req_id': req_id}
                 self.logger.info(f"📡 Subscribed to {symbol} [{timeframe}] with reqId {req_id}")
                 return True
@@ -164,11 +174,11 @@ class StreamingData:
                 df_new = pd.DataFrame([row], index=[bar_time])
                 df = pd.concat([df, df_new])
                 df = df[~df.index.duplicated(keep='last')]
-                
+                '''
                 if len(df) > self.buffer_limit:
                     self.logger.info(f"✂️ Truncating live data to last {self.buffer_limit} bars for {symbol} [{timeframe}]")
                     df = df.tail(self.buffer_limit)
-                
+                '''
                 self._data_cache[symbol][timeframe] = df
                 
                 self.logger.info(f"🆕 New {timeframe} bar for {symbol} at {bar_time}")
