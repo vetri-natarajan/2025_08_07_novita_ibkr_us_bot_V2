@@ -194,9 +194,9 @@ class order_manager_class:
                                 exit_fill_prices.append(fill.execution.price)
                                 exit_fill_quantities.append(fill.execution.shares)
                    
-                    #volume weighted average price
+                    # volume weighted average price
                     if exit_fill_prices and exit_fill_quantities:
-                        total_quantity = sum(exit_fill_prices)
+                        total_quantity = sum(exit_fill_quantities)
                         weighted_sum = sum(p*q for p, q in zip(exit_fill_prices, exit_fill_quantities))
                         avg_exit_price = weighted_sum/total_quantity
                     else: 
@@ -204,7 +204,7 @@ class order_manager_class:
                 except Exception as e :
                     self.logger.exception("🚨 Failed to fetch exit fills for %s Exception: %s", trade_id, e)   
                     avg_exit_price = None             
-                    
+                
                 try: 
                     if fill_price and avg_exit_price: 
                         pnl_pct = (avg_exit_price - fill_price)/fill_price if side == "BUY" else (fill_price - avg_exit_price)/fill_price
@@ -215,13 +215,31 @@ class order_manager_class:
                         self.loss_tracker.add_trade_result(False)
                 
                 except Exception as e :
-                    self.logger.exception("❌ Error computing PnL for %s Exception: %s", trade_id, e)   
+                    self.logger.exception("❌ Error computing PnL for %s Exception: %s", trade_id, e)
+    
+                # Cancel stop-loss and take-profit orders on exit if still active
+                try:
+                    sl_order_id = record.get("sl_order_id")
+                    tp_order_id = record.get("tp_order_id")
+    
+                    for order_id in [sl_order_id, tp_order_id]:
+                        if order_id is not None:
+                            ib_orders = self.ib.orders()
+                            for ib_order in ib_orders:
+                                if getattr(ib_order, "permId", None) == order_id:
+                                    self.ib.cancelOrder(ib_order)
+                                    self.logger.info("✅ Cancelled order %s on trade exit %s", order_id, trade_id)
+                                    break
+                except Exception as e:
+                    self.logger.exception("❌ Failed to cancel child exit orders for %s: %s", trade_id, e)
+                
                 try: 
                     del self.active_trades[trade_id]
                 except KeyError:
                     pass
                 await self.save_state()
                 return
+
                                           
             
                 

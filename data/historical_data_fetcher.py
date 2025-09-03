@@ -120,7 +120,16 @@ class HistoricalDataFetcher:
         df = df.set_index('date')
         df = df.loc[~df.index.duplicated(keep='first')]
         df = df.sort_index()
+       
+        print('type', type(df.index ))       
+        print('type', type(start_time))
+        print('df.index===>', df.index)
+        print('start_time===>', start_time)
+        print('end_time===>', end_time)
+    
         df = df[(df.index >= start_time) & (df.index <= end_time)]
+        
+        print('df.tail===>', df)
 
         self.logger.info(f"Completed fetching historical data for {symbol} {timeframe} with {len(df)} records")
 

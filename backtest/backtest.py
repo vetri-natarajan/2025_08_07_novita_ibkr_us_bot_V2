@@ -193,6 +193,17 @@ class BacktestEngine:
                 writer.writerow([date.strftime("%Y-%m-%d"), passed, reason])
         self.logger.info(f"Daily checks report saved to {filepath}")
 
+
+    def ensure_utc(self, dt_index_or_series):
+        """
+        Ensure a pandas DateTimeIndex or Series of datetimes is tz-aware in UTC.
+        Works for both tz-naive and tz-aware inputs.
+        """
+        if dt_index_or_series.tz is None:
+            return dt_index_or_series.tz_localize("UTC")
+        else:
+            return dt_index_or_series.tz_convert("UTC")
+        
     async def run_backtest(
         self,
         config_dict,
@@ -254,8 +265,15 @@ class BacktestEngine:
 
                     df_LTF_slice = df_LTF_day.iloc[:idx + 1]
                     current_time = df_LTF_slice.index[-1]
-                    df_HTF_slice = df_HTF.loc[:current_time]
-                    df_MTF_slice = df_MTF.loc[:current_time]
+                    print("current_time ===> ", current_time)
+                    print("df_HTF ===> ", df_HTF.head())
+                    
+                    df_HTF.index = self.ensure_utc(pd.to_datetime(df_HTF.index))
+                    df_MTF.index = self.ensure_utc(pd.to_datetime(df_MTF.index))
+                    
+                    current_time_utc = self.ensure_utc(pd.DatetimeIndex([current_time]))[0]
+                    df_HTF_slice = df_HTF.loc[:current_time_utc]            
+                    df_MTF_slice = df_MTF.loc[:current_time_utc]
                     try:
                         self.logger.info(
                             f"df_HTF_slice --> {df_HTF_slice} | "
