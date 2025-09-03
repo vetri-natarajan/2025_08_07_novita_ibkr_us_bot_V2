@@ -1,12 +1,9 @@
-"""
-execution/order_manager.py
-
-"""
 from ib_async import IB, MarketOrder, StopOrder, LimitOrder
 from typing import Dict, Any
 import asyncio
 import json
 import os
+import datetime
 from data.market_data import MarketData
 
 class order_manager_class:
@@ -30,13 +27,14 @@ class order_manager_class:
         self.auto_trade_save_secs = auto_trade_save_secs
         self.active_trades: Dict[str, Dict[str, Any]] = {}
         self._state_task = asyncio.create_task(self._periodic_state_save())
+
+        self.portfolio_snapshot_interval_secs = 30 * 60  # 30 minutes initially
+        self._portfolio_snapshot_task = asyncio.create_task(self._periodic_portfolio_snapshot())
+        
         self.exchange = config_dict['exchange']
         self.currency = config_dict['currency']
         self.logger.info("✅ Order manager initialized successfully")
         
-        
-          
-               
     async def place_market_entry_with_bracket(self, contract, 
                                               qty: int, 
                                               side: str, 
@@ -48,15 +46,10 @@ class order_manager_class:
             return None            
         
         order = MarketOrder(side.upper(), qty)
-
         parent_order =  self.ib.placeOrder(contract, order)
         await parent_order.filledEvent
         
-        #print("placed_order===> ", placed_order)
-        #print("placed_order.orderStatus===> ", placed_order.orderStatus)
-        
         order_id = getattr(parent_order.orderStatus, "permId", None)
-        #print("placed_order_id===> ", order_id)
         symbol_temp = getattr(contract, "symbol", "UNKNOWN")
         trade_id = f"{symbol_temp}-{order_id}"
         record = {
@@ -94,10 +87,7 @@ class order_manager_class:
             await asyncio.sleep(0.5)
             trades = self.ib.trades()
             parent_trade = None
-
             for t in trades: 
-                #print("trade ===>")
-                #print(t)
                 if getattr(t.order, "permId", None) == order_id:
                     parent_trade = t
                     break
@@ -150,7 +140,6 @@ class order_manager_class:
             self.logger.warning("⏳❌ Parent order for %s did not fill within timeout; marked FAILED", trade_id)
             await self.save_state()
             return     
-
     
     async def _monitor_exit(self, trade_id: str):
         record = self.active_trades.get(trade_id)
@@ -168,7 +157,7 @@ class order_manager_class:
             try: 
                 positions = self.ib.positions()
             except Exception:
-                position = []
+                positions = []
                 
             still_holding = False
             for pos in positions:
@@ -240,8 +229,6 @@ class order_manager_class:
                 await self.save_state()
                 return
 
-                                          
-            
                 
     async def _periodic_state_save(self):
         try: 
@@ -251,8 +238,39 @@ class order_manager_class:
                 
         except Exception as e: 
             self.logger.info("🛑 OrderManager._periodic_state_save exception: %s", e)
-                
 
+    async def _periodic_portfolio_snapshot(self):
+        try:
+            while True:
+                await asyncio.sleep(self.portfolio_snapshot_interval_secs)
+                await self.save_portfolio_snapshot()
+        except Exception as e:
+            self.logger.info(f"🛑 OrderManager._periodic_portfolio_snapshot exception: {e}")
+
+    async def save_portfolio_snapshot(self):
+        snapshot_data = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "active_trades": {}
+        }
+        for trade_id, rec in self.active_trades.items():
+            snapshot_data["active_trades"][trade_id] = {
+                "symbol": getattr(rec.get('contract'), 'symbol', None),
+                "qty": rec.get("qty"),
+                "side": rec.get("side"),
+                "state": rec.get("state"),
+                "fill_price": rec.get("fill_price"),
+                "sl_price": rec.get("sl_price"),
+                "tp_price": rec.get("tp_price"),
+                "meta": rec.get("meta")
+            }
+        try:
+            # Append snapshot as new line in JSON Lines format
+            with open('reports/portfolio_snapshots.json', 'a') as f:
+                f.write(json.dumps(snapshot_data) + '\\n')
+            self.logger.info("✅ Portfolio snapshot saved at %s", snapshot_data["timestamp"])
+        except Exception as e:
+            self.logger.exception("🚨 Failed to save portfolio snapshot: %s", e)
+                
     async def save_state(self):
         data = {}
         for trade_id, rec in self.active_trades.items():
@@ -313,7 +331,6 @@ class order_manager_class:
         else:
             # process positions normally
             pass
-
         
         pos_symbols = {p.contract.symbol: p.position for p in positions}
         print("pos_symbols===>")
@@ -332,9 +349,7 @@ class order_manager_class:
             
             if not symbol: 
                 continue
-            #pos_qty = pos_symbols.get(pos_symbols.position, 0)
             pos_qty = pos_symbols.get(symbol, 0)  # Fix here
-
             if pos_qty == 0:
                 continue
             contract = market_data.create_stock_contract(symbol, self.exchange, self.currency)
@@ -366,7 +381,3 @@ class order_manager_class:
                 self.logger.info(f"⚠️ Exception in has_active_trades module: {e}")
                 
         return False
-                
-
-                    
-        
