@@ -224,20 +224,20 @@ async def run_live_mode(ib_connector):
         vix = await get_vix(ib, exchange, currency, vix_symbol, logger)
     except Exception:
         vix = vix_threshold
+        
     for symbol in symbol_list:
         contract = ib_connector.create_stock_contract(symbol, exchange, currency)
         parsed_tf = watchlist_main_settings[symbol]['Parsed TF']
         ta_settings, max_look_back = read_ta_settings(symbol, config_directory, logger)
         max_tf = parsed_tf[0]
     
-        # Seed historical data for all timeframes by subscribing each
         for tf in parsed_tf:
             subscribed = await streaming_data.subscribe(contract, tf, max_tf, max_look_back)
             if not subscribed:
                 logger.warning(f"⚠️ Subscription failed for {symbol} {tf}")
                 continue
     
-            # Define on_bar wrapper per timeframe
+            # Register callback wrapper as before
             async def on_bar_handler_wrapper(symbol_inner, timeframe_inner, df_inner, tf=tf):
                 await on_bar_handler(symbol_inner, timeframe_inner, df_inner,
                                      market_data=streaming_data,
@@ -246,9 +246,18 @@ async def run_live_mode(ib_connector):
                                      account_value=account_value,
                                      vix=vix,
                                      logger=logger)
-            
             streaming_data.on_bar(symbol, tf, on_bar_handler_wrapper)
     
+            # Immediately fire the callback with seeded historical bars to check initial conditions
+            seeded_df = streaming_data.get_latest(symbol, tf)
+            if seeded_df is not None and not seeded_df.empty:
+                # Run callback synchronously here (no live bar yet, so dummy event loop sync)
+                asyncio.create_task(on_bar_handler_wrapper(symbol, tf, seeded_df))
+            else:
+                logger.warning(f"⚠️ No seeded historical data to trigger initial callback for {symbol} [{tf}]")
+
+
+
     logger.info(f"✅ Subscribed and set handlers for all timeframes for {symbol}")
     try:
         while True:

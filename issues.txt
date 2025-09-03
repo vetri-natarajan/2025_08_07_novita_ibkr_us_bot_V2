@@ -47,3 +47,4 @@
 47. what is the meaning of vwap +1% means?
 48. there is bufferlimit in seed historical...
 49. backtesteer reads everytime the symbol... that should not be
+50. in main mdule rn_llive_mode thee is vix = vix_threshold
