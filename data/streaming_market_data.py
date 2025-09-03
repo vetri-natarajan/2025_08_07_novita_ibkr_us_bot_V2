@@ -79,7 +79,6 @@ class StreamingData:
                 duration_str_value = 5
             duration_str = f"{duration_str_value} W"
             self.logger.info(f"📅 Duration string set to {duration_str} (weekly)")
-
         elif max_tf.lower() == "30 mins":
             division_factor = MAX_TF_TO_LTF.get(max_tf).get(timeframe)
             duration_str_value = int(duration_value / division_factor)
@@ -87,7 +86,6 @@ class StreamingData:
                 duration_str_value = 2
             duration_str = f"{duration_str_value} D"
             self.logger.info(f"⏱️ Duration string set to {duration_str} (intraday)")
-
         else:
             err_msg = "⚠️ Invalid max timeframe. Should be '1 week' or '30 mins'."
             self.logger.error(err_msg)
@@ -134,15 +132,15 @@ class StreamingData:
             if timeframe in self._subscriptions[symbol]:
                 self.logger.info(f"♻️ Already subscribed: {symbol} [{timeframe}]")
                 return True
-    
+
             self.logger.info(f"🌱 Seeding historical data for {symbol} [{timeframe}]")
             df = await self.seed_historical(contract, timeframe, max_tf, max_look_back)
             if df is None:
                 df = pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
                 self.logger.warning(f"⚠️ Starting with empty data for {symbol} [{timeframe}] after failed seed")
-    
+
             self._data_cache[symbol][timeframe] = df
-    
+
             try:
                 if timeframe == '1 min':
                     bars = self.ib.reqRealTimeBars(contract, 5, "TRADES", useRTH=True)
@@ -153,6 +151,7 @@ class StreamingData:
                     tf_minutes = TF_TO_MINUTES.get(timeframe)
                     if tf_minutes is None:
                         raise ValueError(f"Unsupported timeframe {timeframe} for aggregation")
+
                     self._aggregators[(symbol, timeframe)] = BarAggregator(tf_minutes, self.logger)
                     self._subscriptions[symbol][timeframe] = {'contract': contract, 'aggregator': self._aggregators[(symbol, timeframe)]}
                     self.logger.info(f"Setup aggregator for {symbol} [{timeframe}]")
@@ -161,19 +160,21 @@ class StreamingData:
                 self.logger.error(f"❌ Failed to subscribe to {symbol} [{timeframe}]: {e}")
                 return False
 
-
     async def _on_bar_update(self, bars, hasNewBar, symbol, timeframe):
         if not hasNewBar or timeframe != "1 min":
             return
 
         latest_bar = bars[-1]
         bar_time = latest_bar.time
+
         if isinstance(bar_time, int):
             bar_time = datetime.fromtimestamp(bar_time, timezone.utc)
         elif isinstance(bar_time, str):
             bar_time = pd.to_datetime(bar_time)
+
         if bar_time.tzinfo is None:
             bar_time = bar_time.tz_localize(timezone.utc)
+
         bar_time = bar_time.replace(second=0, microsecond=0)
 
         base_bar = AggregatedBar(
@@ -192,6 +193,7 @@ class StreamingData:
         for (sym, tf), aggregator in self._aggregators.items():
             if sym != symbol:
                 continue
+
             agg_bar = aggregator.add_bar(base_bar)
             if agg_bar:
                 await self._update_cache_and_callbacks(symbol, tf, agg_bar)
@@ -204,9 +206,11 @@ class StreamingData:
             'close': agg_bar.close,
             'volume': agg_bar.volume
         }
+
         df = self._data_cache.get(symbol, {}).get(timeframe)
         if df is None:
             df = pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
+
         df_new = pd.DataFrame([row], index=[agg_bar.time])
         df = pd.concat([df, df_new])
         df = df[~df.index.duplicated(keep='last')]
@@ -226,6 +230,7 @@ class StreamingData:
         if not callbacks:
             self.logger.debug(f"🔕 No callbacks registered for {symbol} [{timeframe}]")
             return
+
         self.logger.debug(f"🔔 Triggering {len(callbacks)} callbacks for {symbol} [{timeframe}]")
         tasks = []
         for cb in callbacks:

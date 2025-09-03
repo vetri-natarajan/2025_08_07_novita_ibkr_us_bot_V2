@@ -258,7 +258,7 @@ async def run_live_mode(ib_connector):
 
 
 
-    logger.info(f"✅ Subscribed and set handlers for all timeframes for {symbol}")
+        logger.info(f"✅ Subscribed and set handlers for all timeframes for {symbol}")
     try:
         while True:
             await asyncio.sleep(60)

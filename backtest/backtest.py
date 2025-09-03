@@ -266,13 +266,13 @@ class BacktestEngine:
                         self.logger.info(f"Exception: {e}")
 
                     ta_settings, max_look_back = read_ta_settings(symbol, config_directory, self.logger)
-                    okHTF = check_HTF_conditions(symbol, watchlist_main_settings, ta_settings, df_HTF_slice, self.logger)
-                    okMTF = check_MTF_conditions(symbol, watchlist_main_settings, ta_settings, df_MTF_slice, self.logger)
+                    okHTF = check_HTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df_HTF_slice, self.logger)
+                    okMTF = check_MTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df_MTF_slice, self.logger)
                     if not (okHTF and okMTF):
                         continue
                     if len(df_LTF_slice) < 10:
                         continue
-                    sig = check_LTF_conditions(symbol, watchlist_main_settings, ta_settings, df_LTF_slice, df_HTF_slice, self.logger)
+                    sig = check_LTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df_LTF_slice, df_HTF_slice, self.logger)
                     if sig and (symbol not in self.positions or self.positions[symbol]['qty'] == 0):
                         last_price = float(df_LTF_slice['close'].iloc[-1])
                         vix = self.premarket.get_close_price(self.premarket.vix_df, current_day.date())

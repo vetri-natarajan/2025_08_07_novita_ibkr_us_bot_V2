@@ -51,6 +51,7 @@ def check_LTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_L
 
     HH_LL_bars = int(main_settings[symbol]['HHLL'])
     lastNHTF = df_HTF.iloc[-HH_LL_bars-1:-1].copy()
+    logger.info(f'LTF tail====>\n {df_LTF.tail()}')
     breakout_level = lastNHTF['high'].max()
     last = df_LTF.iloc[-1]
     last_close = last['close']
