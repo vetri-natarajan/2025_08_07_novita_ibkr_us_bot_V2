@@ -208,7 +208,7 @@ async def on_bar_handler(symbol, timeframe, df, market_data, order_manager, cfg,
 async def run_live_mode(ib_connector):
     account_value = trading_capital
     market_data = MarketData(ib)
-    streaming_data = StreamingData(ib, logger)
+    streaming_data = StreamingData(ib, logger, trading_time_zone)
     loss_tracker = loss_tracker_class(loss_halt_count, loss_halt_duration_hours, trade_state_file)
     pre_market = pre_market_checks(ib, config_dict, loss_tracker, vix_symbol, spx_symbol, logger)
     trade_reporter = trade_reporter_class(trade_reporter_file, logger)
@@ -258,7 +258,7 @@ async def run_live_mode(ib_connector):
 
 
 
-        logger.info(f"✅ Subscribed and set handlers for all timeframes for {symbol}")
+    logger.info(f"✅ Subscribed and set handlers for all timeframes for {symbol}")
     try:
         while True:
             await asyncio.sleep(60)
