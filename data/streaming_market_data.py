@@ -11,6 +11,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 TF_TO_MINUTES = {
     '1 min': 1,
+    '2 mins': 2,
+    '3 mins': 3,
     '5 mins': 5,
     '30 mins': 30,
     '1 day': 60 * 24,
@@ -19,7 +21,8 @@ TF_TO_MINUTES = {
 
 MAX_TF_TO_LTF = {
     '1 week': {'1 week': 1, '1 day': 5, '5 mins': 78 * 5},
-    '30 mins': {'30 mins': 1, '5 mins': 6, '1 min': 30}
+    '30 mins': {'30 mins': 1, '5 mins': 6, '1 min': 30},
+    '3 mins': {'3 mins': 1, '2 mins': 1.5, '1 min': 1},
 }
 
 @dataclass
@@ -56,7 +59,8 @@ class BarAggregator:
         volume = sum(b.volume for b in self.bars)
         last_time = self.bars[-1].time
 
-        time = self._normalize_time(last_time)
+        #time = self._normalize_time(last_time)
+        time = last_time
 
         return AggregatedBar(time, open_, high, low, close, volume)
 
@@ -68,7 +72,8 @@ class BarAggregator:
         volume = sum(b.volume for b in bars)
         last_time = bars[-1].time
 
-        time = self._normalize_time(last_time)
+        #time = self._normalize_time(last_time)
+        time = last_time
 
         return AggregatedBar(time, open_, high, low, close, volume)
 
@@ -89,7 +94,9 @@ class StreamingData:
         self.logger = logger
         self.time_zone = trading_time_zone
         self.buffer_limit = buffer_limit
+        self.bars = None
         self.executor = ThreadPoolExecutor(max_workers=5)
+        self._stream_subscribed = False
         self._lock = asyncio.Lock()
         self._subscriptions: Dict[str, Dict[str, dict]] = defaultdict(dict)  # symbol -> timeframe -> subscription info
         self._data_cache: Dict[str, Dict[str, pd.DataFrame]] = defaultdict(dict)  # symbol -> timeframe -> df
@@ -110,6 +117,17 @@ class StreamingData:
         elif max_tf.lower() == "30 mins":
             division_factor = MAX_TF_TO_LTF.get(max_tf).get(timeframe)
             duration_str_value = int(duration_value / division_factor)
+            if duration_str_value == 0 and timeframe == '5 min':
+                duration_str_value = 2
+            if duration_str_value == 0 and timeframe == '1 min':
+                duration_str_value = 2
+            duration_str = f"{duration_str_value} D"
+            self.logger.info(f"⏱️ Duration string set to {duration_str} (intraday)")
+        elif max_tf.lower() == "3 mins":
+            division_factor = MAX_TF_TO_LTF.get(max_tf).get(timeframe)
+            duration_str_value = int(duration_value / division_factor)
+            if duration_str_value == 0 and timeframe == '2 min':
+                duration_str_value = 2
             if duration_str_value == 0 and timeframe == '1 min':
                 duration_str_value = 2
             duration_str = f"{duration_str_value} D"
@@ -170,12 +188,17 @@ class StreamingData:
             
             self._data_cache[symbol][timeframe] = df
             try:
-                if timeframe == '1 min':
+                if not self._stream_subscribed:
                     bars = self.ib.reqRealTimeBars(contract, 5, "TRADES", useRTH=True)
                     bars.updateEvent += functools.partial(self._on_bar_update, symbol=symbol, timeframe='5 secs')
                     self._subscriptions[symbol]['5 secs'] = {'contract': contract, 'bars': bars}
                     self.logger.info(f"📡 Subscribed to real-time 5-sec bars for {symbol}")
+                    self._stream_subscribed = True
+                    
+                if timeframe == '1 min':                    
                     self._aggregators[(symbol, '1 min')] = BarAggregator(12, self.logger)
+                    self._subscriptions[symbol][timeframe] = {'contract': contract, 'aggregator': self._aggregators[(symbol, timeframe)]}
+                    self.logger.info(f"Setup aggregator for {symbol} [{timeframe}] with bars_to_aggregate={timeframe}")
                 else:
                     tf_minutes = TF_TO_MINUTES.get(timeframe)
                     if tf_minutes is None:

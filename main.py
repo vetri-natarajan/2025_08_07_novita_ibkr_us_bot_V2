@@ -181,9 +181,9 @@ async def process_trading_signals_cached(symbol, df_HTF, df_MTF, df_LTF,
         logger.info(f"✅ Trade placed {trade_id} for {symbol} qty {qty}")
     return trade_id is not None
 
-async def on_bar_handler(symbol, timeframe, df, market_data, order_manager, cfg, account_value, vix, logger):
+async def on_bar_handler(symbol, timeframe, df, market_data,ta_settings, max_look_back, order_manager, cfg, account_value, vix, logger):
     HTF, MTF, LTF = watchlist_main_settings[symbol]['Parsed TF']
-    ta_settings, max_look_back = read_ta_settings(symbol, config_directory, logger)
+    
     logger.info(f"TA settings loaded for {symbol}")
     if timeframe == HTF:
         htf_signals[symbol] = check_HTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df, logger)
@@ -207,6 +207,7 @@ async def on_bar_handler(symbol, timeframe, df, market_data, order_manager, cfg,
                                             skip_on_high_vix=cfg["skip_on_high_vix"])
 
 async def run_live_mode(ib_connector):
+    
     account_value = trading_capital
     market_data = MarketData(ib)
     streaming_data = StreamingData(ib, logger, trading_time_zone)
@@ -231,6 +232,7 @@ async def run_live_mode(ib_connector):
         parsed_tf = watchlist_main_settings[symbol]['Parsed TF']
         ta_settings, max_look_back = read_ta_settings(symbol, config_directory, logger)
         max_tf = parsed_tf[0]
+        ta_settings, max_look_back = read_ta_settings(symbol, config_directory, logger)
     
         for tf in parsed_tf:
             subscribed = await streaming_data.subscribe(contract, tf, max_tf, max_look_back)
@@ -242,6 +244,8 @@ async def run_live_mode(ib_connector):
             async def on_bar_handler_wrapper(symbol_inner, timeframe_inner, df_inner, tf=tf):
                 await on_bar_handler(symbol_inner, timeframe_inner, df_inner,
                                      market_data=streaming_data,
+                                     ta_settings = ta_settings, 
+                                     max_look_back = max_look_back,
                                      order_manager=order_manager,
                                      cfg=config_dict,
                                      account_value=account_value,

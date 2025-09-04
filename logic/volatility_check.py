@@ -10,9 +10,11 @@ def check_MTF_conditions(symbol, main_settings, ta_settings, max_look_back,  df_
     parsed_MTF = main_settings[symbol]["Parsed TF"][1]
 
     mtf_look_back = 0
-    if parsed_HTF == '30 mins' and parsed_MTF == '5 mins':
+    if parsed_HTF == '1 week' and parsed_MTF == '1 day':
+        mtf_look_back = HH_LL_bars * 5
+    elif parsed_HTF == '30 mins' and parsed_MTF == '5 mins':
         mtf_look_back = HH_LL_bars * 6
-    elif parsed_HTF == '1 week' and parsed_MTF == '1 day':
+    elif parsed_HTF == '3 mins' and parsed_MTF == '2 mins':
         mtf_look_back = HH_LL_bars * 5
     else:
         logger.info("❌ MTF Higher and medium time frame mismatch detected 🚩")
