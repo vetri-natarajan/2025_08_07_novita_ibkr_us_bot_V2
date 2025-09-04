@@ -5,10 +5,12 @@ from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from ib_async import IB, Stock, util, Index
 from tqdm import tqdm
+import pytz
 
 class HistoricalDataFetcher:
     def __init__(self, ib: IB, config_dict, watchlist_main_settings, logger, data_dir):
         self.ib = ib
+        self.time_zone = config_dict['trading_time_zone']
         self.max_days_per_request = 30  # IB max approx for 1-min+ bars
         self.watchlist_main_settings = watchlist_main_settings
         self.exchange = config_dict['exchange']
@@ -120,7 +122,18 @@ class HistoricalDataFetcher:
         df = df.set_index('date')
         df = df.loc[~df.index.duplicated(keep='first')]
         df = df.sort_index()
+        
+        if df.index.tz is None:
+            df.index = df.index.tz_localize(self.time_zone)
+        else:
+            df.index = df.index.tz_convert(self.time_zone)
        
+        
+        if start_time.tzinfo is None:
+            start_time = start_time.replace(tzinfo=pytz.timezone(self.time_zone))
+        if end_time.tzinfo is None:
+            end_time = end_time.replace(tzinfo=pytz.timezone(self.time_zone))
+            
         print('type', type(df.index ))       
         print('type', type(start_time))
         print('df.index===>', df.index)

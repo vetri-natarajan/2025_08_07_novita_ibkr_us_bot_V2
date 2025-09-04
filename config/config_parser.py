@@ -77,6 +77,7 @@ def get_config_inputs():
         trade_reporter_file = conf["LOGGING"]["trade_reporter_file"]
         order_manager_state_file = conf["LOGGING"]["order_manager_state_file"]
         data_directory = conf["LOGGING"]["data_directory"]
+        backtest_directory = conf["LOGGING"]["backtest_directory"]
 
         # --- PREMARKET ---
         require_config_valid = parse_bool(conf["PREMARKET"]["require_config_valid"])
@@ -116,6 +117,7 @@ def get_config_inputs():
             "trade_state_file": trade_state_file,
             "order_manager_state_file": order_manager_state_file, 
             "data_directory" : data_directory,
+            "backtest_directory": backtest_directory,
             "require_config_valid": require_config_valid,
             "loss_halt_count": loss_halt_count,
             "loss_halt_duration_hours": loss_halt_duration_hours

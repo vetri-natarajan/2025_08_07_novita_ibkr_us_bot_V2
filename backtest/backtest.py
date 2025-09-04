@@ -13,12 +13,16 @@ from indicators.atr import calculate_atr
 from risk_management.atr_based_sl_tp import compute_atr_sl_tp
 from risk_management.fixed_sl_tp import compute_fixed_sl_tp
 from config.read_ta_settings import read_ta_settings
+from utils.sanitize_filenames import sanitize_filename
+from utils.ensure_utc import ensure_utc
+from utils.time_to_str import time_to_str
+from utils.make_path import make_path
 
 class PreMarketChecksBacktest:
     def __init__(self, historical_vix: pd.DataFrame, historical_spx: pd.DataFrame, config_dict: dict, logger):
         self.vix_df = historical_vix
         self.spx_df = historical_spx
-        self.config = config_dict
+        self.config_dict = config_dict
         self.logger = logger
         self.trading_windows = config_dict.get("trading_windows", {})
         self.test_run = config_dict.get("test_run", False)
@@ -26,7 +30,7 @@ class PreMarketChecksBacktest:
 
     def validate_config(self) -> tuple:
         self.logger.info("🔍 Validating config...")
-        if not self.config:
+        if not self.config_dict:
             self.logger.error("❌ Config dict missing")
             return False, "Config dict missing"
         self.logger.info("✅ Config validation passed")
@@ -182,10 +186,12 @@ class BacktestEngine:
 
         self.logger.info(f"Exited trade {symbol} qty {qty} at {price:.2f} time {time} P&L: {net_pnl:.2f}")
 
-    def write_daily_checks_to_file(self, daily_checks, filename="daily_checks_report.csv", report_dir="backtest_reports"):
-        if not os.path.exists(report_dir):
-            os.makedirs(report_dir)
-        filepath = os.path.join(report_dir, filename)
+    def write_daily_checks_to_file(self, daily_checks, filename="daily_pre_checks_report", backtest_directory="backtest_reports"):
+        backtest_dir = self.config_dict['backtest_directory'] 
+        if not os.path.exists(backtest_dir):
+            os.makedirs(backtest_dir)
+        file = f'{filename}.csv'
+        filepath = make_path(backtest_dir, file)
         with open(filepath, mode='w', newline='') as f:
             writer = csv.writer(f)
             writer.writerow(["date", "conditions_met", "message"])
@@ -194,15 +200,7 @@ class BacktestEngine:
         self.logger.info(f"Daily checks report saved to {filepath}")
 
 
-    def ensure_utc(self, dt_index_or_series):
-        """
-        Ensure a pandas DateTimeIndex or Series of datetimes is tz-aware in UTC.
-        Works for both tz-naive and tz-aware inputs.
-        """
-        if dt_index_or_series.tz is None:
-            return dt_index_or_series.tz_localize("UTC")
-        else:
-            return dt_index_or_series.tz_convert("UTC")
+
         
     async def run_backtest(
         self,
@@ -268,10 +266,10 @@ class BacktestEngine:
                     print("current_time ===> ", current_time)
                     print("df_HTF ===> ", df_HTF.head())
                     
-                    df_HTF.index = self.ensure_utc(pd.to_datetime(df_HTF.index))
-                    df_MTF.index = self.ensure_utc(pd.to_datetime(df_MTF.index))
+                    df_HTF.index = ensure_utc(pd.to_datetime(df_HTF.index))
+                    df_MTF.index = ensure_utc(pd.to_datetime(df_MTF.index))
                     
-                    current_time_utc = self.ensure_utc(pd.DatetimeIndex([current_time]))[0]
+                    current_time_utc = ensure_utc(pd.DatetimeIndex([current_time]))[0]
                     df_HTF_slice = df_HTF.loc[:current_time_utc]            
                     df_MTF_slice = df_MTF.loc[:current_time_utc]
                     try:
@@ -334,9 +332,18 @@ class BacktestEngine:
                         self.enter_trade(symbol, last_price, qty, sl_price, tp_price, sig, entry_time, side="BUY")
             self.logger.info(f"Backtest complete for {symbol}")
 
-        self.write_daily_checks_to_file(daily_checks)
+
+
+        backtest_dir = config_dict['backtest_directory']  
+        now = dt.datetime.now()
+        timestamp_str = time_to_str(now, only_date=True)
+        start_str = time_to_str(start_time, only_date=True)
+        end_str = time_to_str(end_time, only_date=True)
+        backtest_file = f"{symbol}_{timestamp_str}_{start_str}_{end_str}"      
+        daily_checks_file = f"daily_pre_checks_report_{timestamp_str}_{start_str}_{end_str}"
+        self.write_daily_checks_to_file(daily_checks, daily_checks_file)
         self.report_results()
-        self.write_trades_to_file("backtest_reports")
+        self.write_trades_to_file(backtest_dir, f"{backtest_file}_backtest_reports")
 
         # Stop backtest logging to additional file after backtest finishes
         self.stop_backtest_logging()
@@ -361,11 +368,12 @@ class BacktestEngine:
         print(f"Win rate: {win_rate*100:.2f}%")
         print(f"Net P&L: {total_pnl:.2f}")
 
-    def write_trades_to_file(self, report_dir):
-        if not os.path.exists(report_dir):
-            os.makedirs(report_dir)
+    def write_trades_to_file(self, backtest_dir, file):
+       
+        if not os.path.exists(backtest_dir):
+            os.makedirs(backtest_dir)
 
-        filepath = os.path.join(report_dir, "backtest_trades_report.csv")
+        filepath = make_path(backtest_dir, f'{file}.csv')
 
         cum_pnl = 0.0
         rows = []
