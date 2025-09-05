@@ -187,10 +187,14 @@ async def on_bar_handler(symbol, timeframe, df, market_data,ta_settings, max_loo
     logger.info(f"TA settings loaded for {symbol}")
     if timeframe == HTF:
         htf_signals[symbol] = check_HTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df, logger)
-        logger.info(f"HTF({HTF}) signal updated for {symbol}: {htf_signals[symbol]}")
+        signal = htf_signals[symbol]
+        emoji = "✅" if signal else "❌"
+        logger.info(f"{emoji} HTF({HTF}) signal updated for {symbol}: {signal}")
     elif timeframe == MTF:
         mtf_signals[symbol] = check_MTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df, logger)
-        logger.info(f"MTF({MTF}) signal updated for {symbol}: {mtf_signals[symbol]}")
+        signal = htf_signals[symbol]
+        emoji = "✅" if signal else "❌"
+        logger.info(f"{emoji} HTF({HTF}) signal updated for {symbol}: {signal}")
     elif timeframe == LTF:
         df_HTF = market_data.get_latest(symbol, HTF)
         df_MTF = market_data.get_latest(symbol, MTF)
@@ -205,6 +209,14 @@ async def on_bar_handler(symbol, timeframe, df, market_data,ta_settings, max_loo
                                             vix_threshold=cfg["vix_threshold"],
                                             vix_reduction_factor=cfg["vix_reduction_factor"],
                                             skip_on_high_vix=cfg["skip_on_high_vix"])
+async def poll_partial_bars(streaming_data: StreamingData, symbol: str, timeframe: str):
+    while True:
+        partial_bar = streaming_data.get_latest_partial_bar(symbol, timeframe)
+        if partial_bar:
+            streaming_data.logger.info(f"Live partial bar [{symbol}][{timeframe}]: {partial_bar}")
+        else:
+            streaming_data.logger.info(f"No partial bar found for [{symbol}][{timeframe}]")
+        await asyncio.sleep(5)
 
 async def run_live_mode(ib_connector):
     
@@ -239,7 +251,6 @@ async def run_live_mode(ib_connector):
             if not subscribed:
                 logger.warning(f"⚠️ Subscription failed for {symbol} {tf}")
                 continue
-    
             # Register callback wrapper as before
             async def on_bar_handler_wrapper(symbol_inner, timeframe_inner, df_inner, tf=tf):
                 await on_bar_handler(symbol_inner, timeframe_inner, df_inner,
@@ -252,7 +263,8 @@ async def run_live_mode(ib_connector):
                                      vix=vix,
                                      logger=logger)
             streaming_data.on_bar(symbol, tf, on_bar_handler_wrapper)
-    
+            asyncio.create_task(poll_partial_bars(streaming_data, symbol, tf))
+
             # Immediately fire the callback with seeded historical bars to check initial conditions
             seeded_df = streaming_data.get_latest(symbol, tf)
             if seeded_df is not None and not seeded_df.empty:

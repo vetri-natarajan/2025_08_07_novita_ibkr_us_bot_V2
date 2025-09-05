@@ -19,7 +19,8 @@ def check_MTF_conditions(symbol, main_settings, ta_settings, max_look_back,  df_
     else:
         logger.info("❌ MTF Higher and medium time frame mismatch detected 🚩")
         raise ValueError("❌ MTF Higher and medium time frame mismatch detected 🚩")
-
+    
+    logger.info(f"📝 MTF before lastN ====>\n {df_MTF}")
     lastN = df_MTF.iloc[-(mtf_look_back + 1): -1].copy()
     logger.info(f'MTF lastN====>\n {lastN}')
     opens = lastN['open'].astype(float)

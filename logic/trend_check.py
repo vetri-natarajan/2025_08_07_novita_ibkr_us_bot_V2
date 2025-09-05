@@ -13,9 +13,10 @@ def check_HTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_H
     if df_HTF is None or len(df_HTF) < HH_LL_bars:
         logger.info("❌ HTF: Dataframe is None or too short")
         return False
-
+    logger.info(f"➡️ dt HTF  ====>\n {df_HTF}")
     lastN = df_HTF.iloc[-HH_LL_bars-1:-1].copy()
-    logger.info(f'HTF lastN====>\n {lastN}')
+    logger.info(f"➡️ HTF lastN ====>\n {lastN}")
+
 
     opens = lastN['open'].astype(float)
     closes = lastN['close'].astype(float)
