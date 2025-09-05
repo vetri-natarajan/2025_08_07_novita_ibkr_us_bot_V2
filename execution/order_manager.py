@@ -89,6 +89,9 @@ class order_manager_class:
 
         Returns None if data insufficient.
         """
+        
+        parsed_tf = self.watchlist_main_settings[symbol]['Parsed TF']
+        ltf = parsed_tf[2]
         df = self.market_data.get_latest(symbol, ltf)
         if df is None or df.empty or len(df) < 2:
             self.logger.warning(f"VWAP data insufficient for {symbol} {ltf}")
