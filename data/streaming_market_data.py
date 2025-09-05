@@ -2,7 +2,7 @@ import asyncio
 import functools
 import logging
 from collections import defaultdict, deque
-from typing import Dict, Callable, Optional, List, Tuple
+from typing import Dict, Callable, Optional, List, Tuple, Any
 import pandas as pd
 from datetime import datetime
 from dataclasses import dataclass
@@ -111,6 +111,8 @@ class StreamingData:
         self._data_cache: Dict[str, Dict[str, pd.DataFrame]] = defaultdict(dict)  # symbol -> timeframe -> df
         self._callbacks: Dict[Tuple[str, str], List[Callable]] = defaultdict(list)
         self._aggregators: Dict[Tuple[str, str], BarAggregator] = {}  # (symbol, timeframe) -> BarAggregator
+        self.tickers: Dict[str, Any] = {}
+        self.live_tick_subscriptions = set()  # Initialize an empty set to track live tick subs
         self.logger.info(f"🚀 StreamingData initialized with buffer limit {buffer_limit} bars.")
 
     def get_latest_partial_bar(self, symbol: str, timeframe: str) -> Optional[AggregatedBar]:
@@ -199,7 +201,47 @@ class StreamingData:
 
         self.logger.info(f"✅ Seeded {len(df)} bars for {contract.symbol} [{timeframe}]")
         return df
+    
+    async def subscribe_live_ticks(self, symbol: str):
+        if symbol in self.live_tick_subscriptions:
+            return True
+        contract = self._subscriptions.get(symbol, {}).get('5 secs', {}).get('contract')
+        if contract is None:
+            self.logger.error(f"No contract found for {symbol} to subscribe market data")
+            return False
 
+        try:
+            ticker = self.ib.reqMktData(contract, "", False, False)  # genericTickList empty, snapshot False, regulatory snapshot False
+            self.tickers[symbol] = ticker
+            self.live_tick_subscriptions.add(symbol)
+            self.logger.info(f"Subscribed to market data for {symbol}")
+
+            # Optionally, add event handlers to process live updates
+            ticker.updateEvent += functools.partial(self._on_ticker_update, symbol=symbol)
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to subscribe market data for {symbol}: {e}")
+            return False
+
+    async def unsubscribe_live_ticks(self, symbol: str):
+        if symbol not in self.live_tick_subscriptions:
+            return
+        ticker = self.tickers.get(symbol)
+        if ticker:
+            self.ib.cancelMktData(ticker)
+            self.logger.info(f"Unsubscribed market data for {symbol}")
+            del self.tickers[symbol]
+        self.live_tick_subscriptions.remove(symbol)
+
+    def _on_ticker_update(self, ticker, symbol):
+        """
+        Handle ticker update event.
+        You can access last price as ticker.last
+        """
+        last_price = ticker.last
+        # You may cache or dispatch this price as needed
+        #self.logger.debug(f"Market data update for {symbol}: Last Price = {last_price}")
+            
     async def subscribe(self, contract: Contract, timeframe: str, max_tf: str, max_look_back: int) -> bool:
         symbol = contract.symbol
     

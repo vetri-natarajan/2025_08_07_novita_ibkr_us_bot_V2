@@ -19,7 +19,7 @@ from utils.pre_market_checks import pre_market_checks
 from reports.trade_reporter import trade_reporter_class
 from execution.order_manager import order_manager_class
 from data.vix_spx import get_vix
-from strategies.scalping_strategy import check_HTF_conditions, check_MTF_conditions, check_LTF_conditions
+from strategies.strategy import check_HTF_conditions, check_MTF_conditions, check_LTF_conditions
 from execution.position_sizer import compute_qty
 from indicators.atr import calculate_atr
 from risk_management.atr_based_sl_tp import compute_atr_sl_tp
@@ -127,7 +127,7 @@ async def run_backtest_entrypoint(ib, account_value):
         end_time
     )
 
-async def process_trading_signals_cached(symbol, df_HTF, df_MTF, df_LTF,
+async def process_trading_signals_cached(symbol, timeframe, df_HTF, df_MTF, df_LTF,
                                          market_data, order_manager, cfg,
                                          account_value, vix, logger,
                                          watchlist_main_settings, ta_settings,
@@ -140,11 +140,25 @@ async def process_trading_signals_cached(symbol, df_HTF, df_MTF, df_LTF,
     if not mtf_signals.get(symbol, False):
         logger.info(f"⏸️ MTF conditions not met for {symbol}")
         return False
-    okLTF = check_LTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df_LTF, df_HTF, logger)
+    live_price = None
+    ticker = market_data.tickers.get(symbol)
+    if ticker is not None: 
+        live_price = ticker.last
+    is_live = True
+    okLTF = check_LTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df_LTF, df_HTF, logger, is_live, live_price)
     if not okLTF:
         logger.info(f"⏸️ LTF conditions not met for {symbol}")
         return False
-    last_price = df_LTF['close'].iloc[-1]
+   
+    
+    ticker = market_data.tickers.get(symbol)
+    last_price = None
+    if ticker is not None: 
+        last_price = ticker.last
+    
+    else: 
+        last_price = df_LTF['close'].iloc[-1]
+    
     qty = compute_qty(account_value, trading_units, last_price, vix, vix_threshold, vix_reduction_factor, skip_on_high_vix)
     if qty <= 0:
         logger.info(f"⚠️ Qty zero for {symbol}")
@@ -152,6 +166,8 @@ async def process_trading_signals_cached(symbol, df_HTF, df_MTF, df_LTF,
     exit_method = watchlist_main_settings[symbol]['Exit']
     sl_input = watchlist_main_settings[symbol]['SL']
     tp_input = watchlist_main_settings[symbol]['TP']
+    
+    special_exit = False # for E3 and E4 exits
     if exit_method == "E1":
         sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_input, tp_input)
     elif exit_method == "E2":
@@ -163,9 +179,15 @@ async def process_trading_signals_cached(symbol, df_HTF, df_MTF, df_LTF,
         if atr_val is not None:
             sl_price, tp_price = compute_atr_sl_tp(last_price, atr_val, sl_input, tp_input)
         else:
+    
             sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_input, tp_input)
+    elif exit_method in ['E3', 'E4']:
+        sl_price, tp_price = None
+        special_exit = True
     else:
+        logger.info("⚠️ Exit method not defined, taking default fixed_sl_exits.")
         sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_input, tp_input)
+        
     contract = market_data._subscribed.get(symbol, {}).get('contract')
     if contract is None and hasattr(order_manager, 'get_contract'):
         contract = order_manager.get_contract(symbol)
@@ -176,7 +198,8 @@ async def process_trading_signals_cached(symbol, df_HTF, df_MTF, df_LTF,
         logger.info(f"Active trade exists for {symbol}, skipping.")
         return False
     meta = {'signal': okLTF, 'symbol': symbol}
-    trade_id = await order_manager.place_market_entry_with_bracket(contract, qty, 'BUY', sl_price, tp_price, meta)
+    
+    trade_id = await order_manager.place_market_entry_with_bracket( symbol, timeframe, contract, qty, 'BUY', sl_price, tp_price, meta, special_exit)
     if trade_id:
         logger.info(f"✅ Trade placed {trade_id} for {symbol} qty {qty}")
     return trade_id is not None
@@ -188,6 +211,13 @@ async def on_bar_handler(symbol, timeframe, df, market_data,ta_settings, max_loo
     if timeframe == HTF:
         htf_signals[symbol] = check_HTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df, logger)
         signal = htf_signals[symbol]
+        if signal:
+            await market_data.subscribe_live_ticks(symbol)
+            logger.info(f"🔔 Live tick subscribed for {symbol} on HTF signal")        
+        else: 
+            await market_data.unsubscribe_live_ticks(symbol)
+            logger.info(f"🔕 Live tick unsubscribed for {symbol}")   
+            
         emoji = "✅" if signal else "❌"
         logger.info(f"{emoji} HTF({HTF}) signal updated for {symbol}: {signal}")
     elif timeframe == MTF:
@@ -202,13 +232,14 @@ async def on_bar_handler(symbol, timeframe, df, market_data,ta_settings, max_loo
         if df_HTF is None or df_MTF is None or df_LTF is None:
             logger.info(f"⏳ Data not ready for {symbol}")
             return
-        await process_trading_signals_cached(symbol, df_HTF, df_MTF, df_LTF, market_data,
+        await process_trading_signals_cached(symbol, timeframe, df_HTF, df_MTF, df_LTF, market_data,
                                             order_manager, cfg, account_value, vix,
                                             logger, watchlist_main_settings, ta_settings,
                                             max_look_back, trading_units=cfg["trading_units"],
                                             vix_threshold=cfg["vix_threshold"],
                                             vix_reduction_factor=cfg["vix_reduction_factor"],
                                             skip_on_high_vix=cfg["skip_on_high_vix"])
+        
 async def poll_partial_bars(streaming_data: StreamingData, symbol: str, timeframe: str):
     while True:
         partial_bar = streaming_data.get_latest_partial_bar(symbol, timeframe)
@@ -227,7 +258,7 @@ async def run_live_mode(ib_connector):
     pre_market = pre_market_checks(ib, config_dict, loss_tracker, vix_symbol, spx_symbol, logger)
     trade_reporter = trade_reporter_class(trade_reporter_file, logger)
     order_manager = order_manager_class(ib, trade_reporter, loss_tracker, order_manager_state_file,
-                                        trade_time_out_secs, auto_trade_save_secs, config_dict, logger)
+                                        trade_time_out_secs, auto_trade_save_secs, config_dict, watchlist_main_settings, streaming_data, logger)
     await order_manager.load_state(market_data, ib)
     passed, reason = await pre_market.run_checks()
     if not passed:

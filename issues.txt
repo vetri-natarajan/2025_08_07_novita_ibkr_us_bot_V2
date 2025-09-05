@@ -49,3 +49,4 @@
 49. backtesteer reads everytime the symbol... that should not be
 50. in main mdule rn_llive_mode thee is vix = vix_threshold
 51. make sure ib is connected....
+52. in check_ltf moduel, the berakout voule is for the last candle ony
