@@ -17,6 +17,7 @@ from utils.sanitize_filenames import sanitize_filename
 from utils.ensure_utc import ensure_utc
 from utils.time_to_str import time_to_str
 from utils.make_path import make_path
+from utils.is_in_trading_window import is_time_in_trading_windows
 
 class PreMarketChecksBacktest:
     def __init__(self, historical_vix: pd.DataFrame, historical_spx: pd.DataFrame, config_dict: dict, logger):
@@ -60,23 +61,6 @@ class PreMarketChecksBacktest:
         self.logger.info("✅ Rule-of-16 passed")
         return True, ""
 
-    def in_trading_window(self, date_time: dt.datetime) -> tuple:
-        day_name = date_time.strftime('%A').lower()
-        self.logger.info(f"⏰ Checking trading window for {day_name} {date_time.time()}")
-        if day_name not in self.trading_windows:
-            msg = f"No trading window for {day_name}"
-            self.logger.warning(f"⚠️ {msg}")
-            return False, msg
-        start_str, end_str = self.trading_windows[day_name]
-        start_time = dt.datetime.strptime(start_str, '%H:%M').time()
-        end_time = dt.datetime.strptime(end_str, '%H:%M').time()
-        current_time = date_time.time()
-        if not (start_time <= current_time <= end_time):
-            msg = f"Outside trading window {start_str} - {end_str} on {day_name}"
-            self.logger.warning(f"⚠️ {msg}")
-            return False, msg
-        self.logger.info("✅ Inside trading window")
-        return True, ""
 
     def run_checks_for_day(self, date: dt.date) -> tuple:
         self.logger.info(f"🎯 Running pre-market checks for {date}")
@@ -86,12 +70,6 @@ class PreMarketChecksBacktest:
         ok, msg = self.rule_of_16_check(date)
         if not ok:
             return False, msg
-        if not self.test_run:
-            first_window = list(self.trading_windows.values())[0]
-            test_time = dt.datetime.combine(date, dt.datetime.strptime(first_window[0], '%H:%M').time())
-            ok, msg = self.in_trading_window(test_time)
-            if not ok:
-                return False, msg
         self.logger.info(f"✅ All pre-market checks passed for {date}")
         return True, ""
 
@@ -261,6 +239,7 @@ class BacktestEngine:
                 if not passed:
                     self.logger.warning(f"⚠️ Pre-market check failed for {symbol} on {current_day.date()}: {reason}")
                     continue
+                
                 day_start = current_day
                 day_end = current_day + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
                 df_LTF_day = df_LTF.loc[(df_LTF.index >= day_start) & (df_LTF.index <= day_end)]
@@ -268,6 +247,11 @@ class BacktestEngine:
 
                     df_LTF_slice = df_LTF_day.iloc[:idx + 1]
                     current_time = df_LTF_slice.index[-1]
+                    
+                    if not is_time_in_trading_windows(current_time.time(), self.config_dict['trading_windows']):
+                        self.logger.info(f"⏰ current_time {current_time} not in trading windows { self.config_dict['trading_windows']} 🚫")
+                        continue
+                    
                     print("current_time ===> ", current_time)
                     print("df_HTF ===> ", df_HTF.head())
                     
@@ -294,6 +278,7 @@ class BacktestEngine:
                     if len(df_LTF_slice) < 10:
                         continue
                     sig = check_LTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df_LTF_slice, df_HTF_slice, self.logger)
+                    
                     if sig and (symbol not in self.positions or self.positions[symbol]['qty'] == 0):
                         last_price = float(df_LTF_slice['close'].iloc[-1])
                         vix = self.premarket.get_close_price(self.premarket.vix_df, current_day.date())

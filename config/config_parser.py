@@ -70,8 +70,6 @@ def get_config_inputs():
 
         # --- LOGGING ---
         log_directory = conf["LOGGING"]["log_directory"]
-        log_level = conf["LOGGING"]["log_level"].upper()
-        log_file = conf["LOGGING"]["log_file"]
         config_directory = conf["LOGGING"]["config_directory"]
         trade_state_file = conf["LOGGING"]["trade_state_file"]
         trade_reporter_file = conf["LOGGING"]["trade_reporter_file"]
@@ -110,8 +108,6 @@ def get_config_inputs():
             "test_run": test_run,
             "trade_time_out_secs" : trade_time_out_secs,
             "auto_trade_save_secs" : auto_trade_save_secs,
-            "log_level": log_level,
-            "log_file": log_file,
             "config_directory": config_directory,
             "trade_reporter_file": trade_reporter_file,
             "trade_state_file": trade_state_file,

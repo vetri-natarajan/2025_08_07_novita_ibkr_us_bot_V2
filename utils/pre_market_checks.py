@@ -19,6 +19,7 @@ from utils.config_validator import validate_config
 from utils.time_utils import in_trading_window
 from utils.loss_tracker import loss_tracker_class
 #from main import logger
+from utils.is_in_trading_window import is_time_in_trading_windows
 
 
 class pre_market_checks:
@@ -78,8 +79,11 @@ class pre_market_checks:
         #4. checking trading window
         self.logger.info("⏰ Checking the trade window timings... 🕒🔍")
         if not self.test_run:
-            if not in_trading_window(now, self.trading_windows):
+            current_time = dt.datetime.now().time()  
+            if not is_time_in_trading_windows(current_time, self.trading_windows):
+                self.logger.info(f"⏰ current_time {current_time} 📊 trading windows {self.trading_windows}")
                 return False, "Outside Trading window"
+            
         
         return True, ""
             

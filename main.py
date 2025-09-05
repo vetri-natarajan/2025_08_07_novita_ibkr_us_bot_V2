@@ -26,6 +26,7 @@ from risk_management.atr_based_sl_tp import compute_atr_sl_tp
 from risk_management.fixed_sl_tp import compute_fixed_sl_tp
 from data.market_data import MarketData
 from backtest.backtest import BacktestEngine, PreMarketChecksBacktest
+from utils.is_in_trading_window import is_time_in_trading_windows
 
 print("""
 ====================================
@@ -61,8 +62,6 @@ skip_on_high_vix = config_dict["skip_on_high_vix"]
 test_run = config_dict["test_run"]
 trade_time_out_secs = config_dict["trade_time_out_secs"]
 auto_trade_save_secs = config_dict["auto_trade_save_secs"]
-log_level = config_dict["log_level"]
-log_file = config_dict["log_file"]
 config_directory = config_dict["config_directory"]
 trade_state_file = config_dict["trade_state_file"]
 trade_reporter_file = config_dict["trade_reporter_file"]
@@ -134,75 +133,80 @@ async def process_trading_signals_cached(symbol, timeframe, df_HTF, df_MTF, df_L
                                          max_look_back, trading_units,
                                          vix_threshold, vix_reduction_factor,
                                          skip_on_high_vix):
-    if not htf_signals.get(symbol, False):
-        logger.info(f"⏸️ HTF conditions not met for {symbol}")
-        return False
-    if not mtf_signals.get(symbol, False):
-        logger.info(f"⏸️ MTF conditions not met for {symbol}")
-        return False
-    live_price = None
-    ticker = market_data.tickers.get(symbol)
-    if ticker is not None: 
-        live_price = ticker.last
-    is_live = True
-    okLTF = check_LTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df_LTF, df_HTF, logger, is_live, live_price)
-    if not okLTF:
-        logger.info(f"⏸️ LTF conditions not met for {symbol}")
-        return False
-   
+    current_time = datetime.now().time()  
+    if (is_time_in_trading_windows(current_time, trading_windows)) or test_run:
     
-    ticker = market_data.tickers.get(symbol)
-    last_price = None
-    if ticker is not None: 
-        last_price = ticker.last
-    
-    else: 
-        last_price = df_LTF['close'].iloc[-1]
-    
-    qty = compute_qty(account_value, trading_units, last_price, vix, vix_threshold, vix_reduction_factor, skip_on_high_vix)
-    if qty <= 0:
-        logger.info(f"⚠️ Qty zero for {symbol}")
-        return False
-    exit_method = watchlist_main_settings[symbol]['Exit']
-    sl_input = watchlist_main_settings[symbol]['SL']
-    tp_input = watchlist_main_settings[symbol]['TP']
-    
-    special_exit = False # for E3 and E4 exits
-    if exit_method == "E1":
-        sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_input, tp_input)
-    elif exit_method == "E2":
-        try:
-            atr_val_df = calculate_atr(df_LTF, max_look_back * 2)
-            atr_val = float(atr_val_df.iloc[-1])
-        except Exception:
-            atr_val = None
-        if atr_val is not None:
-            sl_price, tp_price = compute_atr_sl_tp(last_price, atr_val, sl_input, tp_input)
-        else:
-    
-            sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_input, tp_input)
-    elif exit_method in ['E3', 'E4']:
-        sl_price, tp_price = None
-        special_exit = True
-    else:
-        logger.info("⚠️ Exit method not defined, taking default fixed_sl_exits.")
-        sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_input, tp_input)
+        if not htf_signals.get(symbol, False):
+            logger.info(f"⏸️ HTF conditions not met for {symbol}")
+            return False
+        if not mtf_signals.get(symbol, False):
+            logger.info(f"⏸️ MTF conditions not met for {symbol}")
+            return False
+        live_price = None
+        ticker = market_data.tickers.get(symbol)
+        if ticker is not None: 
+            live_price = ticker.last
+        is_live = True
+        okLTF = check_LTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df_LTF, df_HTF, logger, is_live, live_price)
+        if not okLTF:
+            logger.info(f"⏸️ LTF conditions not met for {symbol}")
+            return False
+       
         
-    contract = market_data._subscribed.get(symbol, {}).get('contract')
-    if contract is None and hasattr(order_manager, 'get_contract'):
-        contract = order_manager.get_contract(symbol)
-    if contract is None:
-        logger.warning(f"No contract for {symbol}, skip.")
-        return False
-    if order_manager.has_active_trades_for_symbol(symbol):
-        logger.info(f"Active trade exists for {symbol}, skipping.")
-        return False
-    meta = {'signal': okLTF, 'symbol': symbol}
-    
-    trade_id = await order_manager.place_market_entry_with_bracket( symbol, timeframe, contract, qty, 'BUY', sl_price, tp_price, meta, special_exit)
-    if trade_id:
-        logger.info(f"✅ Trade placed {trade_id} for {symbol} qty {qty}")
-    return trade_id is not None
+        ticker = market_data.tickers.get(symbol)
+        last_price = None
+        if ticker is not None: 
+            last_price = ticker.last
+        
+        else: 
+            last_price = df_LTF['close'].iloc[-1]
+        
+        qty = compute_qty(account_value, trading_units, last_price, vix, vix_threshold, vix_reduction_factor, skip_on_high_vix)
+        if qty <= 0:
+            logger.info(f"⚠️ Qty zero for {symbol}")
+            return False
+        exit_method = watchlist_main_settings[symbol]['Exit']
+        sl_input = watchlist_main_settings[symbol]['SL']
+        tp_input = watchlist_main_settings[symbol]['TP']
+        
+        special_exit = False # for E3 and E4 exits
+        if exit_method == "E1":
+            sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_input, tp_input)
+        elif exit_method == "E2":
+            try:
+                atr_val_df = calculate_atr(df_LTF, max_look_back * 2)
+                atr_val = float(atr_val_df.iloc[-1])
+            except Exception:
+                atr_val = None
+            if atr_val is not None:
+                sl_price, tp_price = compute_atr_sl_tp(last_price, atr_val, sl_input, tp_input)
+            else:
+        
+                sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_input, tp_input)
+        elif exit_method in ['E3', 'E4']:
+            sl_price, tp_price = None
+            special_exit = True
+        else:
+            logger.info("⚠️ Exit method not defined, taking default fixed_sl_exits.")
+            sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_input, tp_input)
+            
+        contract = market_data._subscribed.get(symbol, {}).get('contract')
+        if contract is None and hasattr(order_manager, 'get_contract'):
+            contract = order_manager.get_contract(symbol)
+        if contract is None:
+            logger.warning(f"No contract for {symbol}, skip.")
+            return False
+        if order_manager.has_active_trades_for_symbol(symbol):
+            logger.info(f"Active trade exists for {symbol}, skipping.")
+            return False
+        meta = {'signal': okLTF, 'symbol': symbol}
+        
+        trade_id = await order_manager.place_market_entry_with_bracket( symbol, timeframe, contract, qty, 'BUY', sl_price, tp_price, meta, special_exit)
+        if trade_id:
+            logger.info(f"✅ Trade placed {trade_id} for {symbol} qty {qty}")
+        return trade_id is not None
+    else: 
+        logger.info(f"⏰ current_time {current_time} not in trading windows {trading_windows} 🚫")
 
 async def on_bar_handler(symbol, timeframe, df, market_data,ta_settings, max_look_back, order_manager, cfg, account_value, vix, logger):
     HTF, MTF, LTF = watchlist_main_settings[symbol]['Parsed TF']
