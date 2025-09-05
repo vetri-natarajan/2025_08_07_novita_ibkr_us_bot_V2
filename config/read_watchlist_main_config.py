@@ -22,11 +22,15 @@ def return_gains(string):
         
     return (gain1, gain2)
     
+
 def parse_time_frames(hi_to_lo_tf_combined):
     raw_timeframes = [s.strip() for s in hi_to_lo_tf_combined.split(',')]
-    pattern = re.compile(r"(\d+)([mwdMWD])")
+    pattern = re.compile(r"(\d+)([mwdhMWDH])")
     parsed = []
     for tf in raw_timeframes:
+        if tf.lower() == "skip":
+            parsed.append(("skip", "skip"))
+            continue
         match = pattern.fullmatch(tf)
         if match: 
             value = int(match.group(1))
@@ -38,6 +42,10 @@ def parse_time_frames(hi_to_lo_tf_combined):
     tf_string_list_parsed = []
     for tf in parsed:       
         number, unit = tf
+    
+        if number == "skip":
+            tf_string_list_parsed.append("skip")
+            continue
     
         # Map units to full words
         units_map = {
@@ -53,10 +61,13 @@ def parse_time_frames(hi_to_lo_tf_combined):
         # Handle pluralization
         if number == 1:
             tf_string =  f"{number} {unit_word}"
+        elif number is None:
+            tf_string = "invalid"
         else:
             tf_string = f"{number} {unit_word}s"
         tf_string_list_parsed.append(tf_string)
     return raw_timeframes, tf_string_list_parsed
+
     
 def parse_total_gains(total_gains_raw):
     total_gains_stripped = total_gains_raw.strip().replace('%', "").replace('~', "").replace("'", "").replace('""', "")
