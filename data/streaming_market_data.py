@@ -22,7 +22,7 @@ TF_TO_MINUTES = {
 MAX_TF_TO_LTF = {
     '1 week': {'1 week': 1, '1 day': 5, '5 mins': 78 * 5},
     '30 mins': {'30 mins': 1, '5 mins': 6, '1 min': 30},
-    '3 mins': {'3 mins': 1, '2 mins': 1.5, '1 min': 1},
+    '3 mins': {'3 mins': 1, '2 mins': 1.5, '1 min': 3},
 }
 @dataclass
 class AggregatedBar:

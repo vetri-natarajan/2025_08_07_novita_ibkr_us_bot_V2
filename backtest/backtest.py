@@ -214,8 +214,13 @@ class BacktestEngine:
         load_data=True
     ):
         config_directory = config_dict.get("config_directory", "")
+        backtest_dir = config_dict['backtest_directory']  
+        now = dt.datetime.now()
+        timestamp_str = time_to_str(now, only_date=True)
+        backtest_additional_log_file = f"backtest_additional_{timestamp_str}.log"      
+        backtest_additional_log_file = make_path(backtest_dir, backtest_additional_log_file)
         # Start backtest logging to additional file
-        self.start_backtest_logging("backtest_reports/backtest_additional.log")
+        self.start_backtest_logging(backtest_additional_log_file)
 
         self.logger.info("🚀 Starting backtest")
         if end_time is None:
