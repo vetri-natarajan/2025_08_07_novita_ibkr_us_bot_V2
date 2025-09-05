@@ -7,7 +7,7 @@ from tqdm import tqdm
 import sys
 import logging
 # Import your strategy, indicators, and helpers
-from strategies.scalping_strategy import check_HTF_conditions, check_MTF_conditions, check_LTF_conditions
+from strategies.strategy import check_HTF_conditions, check_MTF_conditions, check_LTF_conditions
 from execution.position_sizer import compute_qty
 from indicators.atr import calculate_atr
 from risk_management.atr_based_sl_tp import compute_atr_sl_tp

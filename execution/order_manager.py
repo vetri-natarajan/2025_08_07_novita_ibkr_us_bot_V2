@@ -8,7 +8,7 @@ from data.market_data import MarketData
 from indicators.vwap import calculate_vwap
 from risk_management.dynamic_sl_tp import compute_dynamic_sl_swing
 from risk_management.hedge_sl_tp import compute_hedge_exit_trade
-
+import datetime
 class order_manager_class:
     def __init__(self, ib : IB, 
                  trade_reporter, 
@@ -417,93 +417,102 @@ class order_manager_class:
             self.logger.exception(f"❌ Error during execute_trade_exit for {trade_id}: {e}")
         await self.save_state()
 
-    async def _monitor_exit(self, trade_id: str):
-       record = self.active_trades.get(trade_id)
-       if not record:
-           self.logger.warning("⚠️ No active trade record found for %s; nothing to monitor.", trade_id)
-           return       
-       
-       contract = record["contract"]
-       symbol = getattr(contract, 'symbol')
-       exit_order_ids = [record.get('sl_order_id'), record.get('tp_order_id')]
-       side = record.get('side')
-       
-       while True: 
-           await asyncio.sleep(1)
-           try: 
-               positions = self.ib.positions()
-           except Exception:
-               positions = []
-               
-           still_holding = False
-           for pos in positions:
-               if getattr(pos.contract, "symbol", None) == symbol and pos.position != 0:
-                   still_holding = True
-                   break
-               
-           if not still_holding:   
-               try: 
-                   self.trade_reporter.report_trade_close(trade_id, record)                    
-               except Exception as e: 
-                   self.logger.exception("🚨 Failed to report trade close for %s exception %s", trade_id, e)      
-                   
-               fill_price = record.get("fill_price")
-               exit_fill_prices = []
-               exit_fill_quantities = []
-               
-               try: 
-                   trades = self.ib.trades()
-                   for trade in trades: 
-                       if getattr(trade, "OrderId", None) in exit_order_ids:
-                           for fill in trade.fills: 
-                               exit_fill_prices.append(fill.execution.price)
-                               exit_fill_quantities.append(fill.execution.shares)
-                  
-                   # volume weighted average price
-                   if exit_fill_prices and exit_fill_quantities:
-                       total_quantity = sum(exit_fill_quantities)
-                       weighted_sum = sum(p*q for p, q in zip(exit_fill_prices, exit_fill_quantities))
-                       avg_exit_price = weighted_sum/total_quantity
-                   else: 
-                       avg_exit_price = None
-               except Exception as e :
-                   self.logger.exception("🚨 Failed to fetch exit fills for %s Exception: %s", trade_id, e)   
-                   avg_exit_price = None             
-               
-               try: 
-                   if fill_price and avg_exit_price: 
-                       pnl_pct = (avg_exit_price - fill_price)/fill_price if side == "BUY" else (fill_price - avg_exit_price)/fill_price
-                       
-                   if pnl_pct > 0: 
-                       self.loss_tracker.add_trade_result(True)
-                   else: 
-                       self.loss_tracker.add_trade_result(False)
-               
-               except Exception as e :
-                   self.logger.exception("❌ Error computing PnL for %s Exception: %s", trade_id, e)
-   
-               # Cancel stop-loss and take-profit orders on exit if still active
-               try:
-                   sl_order_id = record.get("sl_order_id")
-                   tp_order_id = record.get("tp_order_id")
-   
-                   for order_id in [sl_order_id, tp_order_id]:
-                       if order_id is not None:
-                           ib_orders = self.ib.orders()
-                           for ib_order in ib_orders:
-                               if getattr(ib_order, "permId", None) == order_id:
-                                   self.ib.cancelOrder(ib_order)
-                                   self.logger.info("✅ Cancelled order %s on trade exit %s", order_id, trade_id)
-                                   break
-               except Exception as e:
-                   self.logger.exception("❌ Failed to cancel child exit orders for %s: %s", trade_id, e)
-               
-               try: 
-                   del self.active_trades[trade_id]
-               except KeyError:
-                   pass
-               await self.save_state()
-               return
+async def _monitor_exit(self, trade_id: str):
+    record = self.active_trades.get(trade_id)
+    if not record:
+        self.logger.warning("⚠️ No active trade record found for %s; nothing to monitor.", trade_id)
+        return
+
+    contract = record["contract"]
+    symbol = getattr(contract, 'symbol')
+    exit_order_ids = [record.get('sl_order_id'), record.get('tp_order_id')]
+    side = record.get('side')
+
+    while True:
+        await asyncio.sleep(1)
+
+        # Check for intraday timed exit for scalping mode
+        mode = self.watchlist_main_settings.get(symbol, {}).get("Mode").upper()
+        if mode == "SCALPING":
+            current_time = datetime.datetime.now().time()
+            exit_time = datetime.time(15, 0)  # 15:00 or 3 PM local time
+            if current_time >= exit_time:
+                self.logger.info(f"🕒 Intraday time exit triggered for scalping trade {trade_id} at {current_time}")
+                await self.execute_trade_exit(trade_id, reason="intraday_time_exit")
+                return
+
+        try:
+            positions = self.ib.positions()
+        except Exception:
+            positions = []
+
+        still_holding = False
+        for pos in positions:
+            if getattr(pos.contract, "symbol", None) == symbol and pos.position != 0:
+                still_holding = True
+                break
+
+        if not still_holding:
+            try:
+                self.trade_reporter.report_trade_close(trade_id, record)
+            except Exception as e:
+                self.logger.exception("🚨 Failed to report trade close for %s exception %s", trade_id, e)
+
+            fill_price = record.get("fill_price")
+            exit_fill_prices = []
+            exit_fill_quantities = []
+
+            try:
+                trades = self.ib.trades()
+                for trade in trades:
+                    if getattr(trade, "OrderId", None) in exit_order_ids:
+                        for fill in trade.fills:
+                            exit_fill_prices.append(fill.execution.price)
+                            exit_fill_quantities.append(fill.execution.shares)
+
+                # Calculate volume weighted average exit price
+                if exit_fill_prices and exit_fill_quantities:
+                    total_quantity = sum(exit_fill_quantities)
+                    weighted_sum = sum(p * q for p, q in zip(exit_fill_prices, exit_fill_quantities))
+                    avg_exit_price = weighted_sum / total_quantity
+                else:
+                    avg_exit_price = None
+
+            except Exception as e:
+                self.logger.exception("🚨 Failed to fetch exit fills for %s Exception: %s", trade_id, e)
+                avg_exit_price = None
+
+            try:
+                if fill_price and avg_exit_price:
+                    pnl_pct = ((avg_exit_price - fill_price) / fill_price) if side == "BUY" else ((fill_price - avg_exit_price) / fill_price)
+                    if pnl_pct > 0:
+                        self.loss_tracker.add_trade_result(True)
+                    else:
+                        self.loss_tracker.add_trade_result(False)
+            except Exception as e:
+                self.logger.exception("❌ Error computing PnL for %s Exception: %s", trade_id, e)
+
+            # Cancel any remaining child exit orders
+            try:
+                sl_order_id = record.get("sl_order_id")
+                tp_order_id = record.get("tp_order_id")
+                for order_id in filter(None, [sl_order_id, tp_order_id]):
+                    for ib_order in self.ib.orders():
+                        if getattr(ib_order, "permId", None) == order_id:
+                            self.ib.cancelOrder(ib_order)
+                            self.logger.info("✅ Cancelled order %s on trade exit %s", order_id, trade_id)
+                            break
+            except Exception as e:
+                self.logger.exception("❌ Failed to cancel child exit orders for %s: %s", trade_id, e)
+
+            try:
+                del self.active_trades[trade_id]
+            except KeyError:
+                pass
+
+            await self.save_state()
+            return
+
 
                
     async def _periodic_state_save(self):
