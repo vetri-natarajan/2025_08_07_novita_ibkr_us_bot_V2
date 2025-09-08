@@ -14,6 +14,7 @@ class HistoricalDataFetcher:
         self.max_days_per_request = 30  # IB max approx for 1-min+ bars
         self.watchlist_main_settings = watchlist_main_settings
         self.exchange = config_dict['exchange']
+        self.exchange_index = config_dict['exchange_index']
         self.currency = config_dict['currency']
         self.spx_symbol = config_dict['spx_symbol']
         self.vix_symbol = config_dict['vix_symbol']
@@ -60,7 +61,7 @@ class HistoricalDataFetcher:
 
     async def fetch_paginated_data(self, symbol: str, timeframe: str, start_time: datetime, end_time: datetime, fetch_index = False) -> pd.DataFrame:
         if fetch_index:
-            contract = Index(symbol, self.exchange, self.currency)
+            contract = Index(symbol, self.exchange_index, self.currency)
         else:
             contract = Stock(symbol, self.exchange, self.currency)
         bars = []

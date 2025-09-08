@@ -39,6 +39,7 @@ print("""
 # Load all config inputs
 config_dict = get_config_inputs()
 exchange = config_dict["exchange"]
+exchange_index = config_dict["exchange_index"]
 currency = config_dict["currency"]
 log_directory = config_dict["log_directory"]
 read_restart = config_dict["read_restart"]

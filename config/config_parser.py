@@ -35,7 +35,8 @@ def get_config_inputs():
         # --- SCRIP ---
         vix_symbol = conf["SCRIP"]["vix_symbol"].upper()
         spx_symbol = conf["SCRIP"]["spx_symbol"].upper()
-        exchange = conf["SCRIP"]["exchange"].replace('"', '').strip()
+        exchange = conf["SCRIP"]["exchange_stocks"].replace('"', '').strip()
+        exchange_index = conf["SCRIP"]["exchange_index"].replace('"', '').strip()
         currency = conf["SCRIP"]["currency"].replace('"', '').strip()
         
 
@@ -87,6 +88,7 @@ def get_config_inputs():
         # Build the flat dictionary
         inputs_dict = {
             "exchange": exchange,
+            "exchange_index" : exchange_index,
             "currency": currency,
             "log_directory": log_directory,
             "read_restart": read_restart,

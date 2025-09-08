@@ -28,6 +28,7 @@ class pre_market_checks:
         self.config_dict = config_dict
         self.loss_tracker_class = loss_tracker
         self.exchange = config_dict["exchange"]
+        self.exchange_index = config_dict["exchange_index"]
         self.currency = config_dict["currency"]
         self.trading_windows = config_dict["trading_windows"]
         self.test_run = config_dict["test_run"]
@@ -55,10 +56,10 @@ class pre_market_checks:
         self.logger.info("📊 Getting VIX and SPY data for Rule of 16 analysis... ⚡️📈")
         try: 
             await self.ib_connector.ensure_connected()
-            vix_val = await vix_spx.get_vix(self.ib, self.exchange, self.currency, self.vix_symbol,  self.ib_connector, self.logger)
+            vix_val = await vix_spx.get_vix(self.ib, self.exchange_index, self.currency, self.vix_symbol,  self.ib_connector, self.logger)
             self.logger.info(f"vix value... {vix_val}")
             await self.ib_connector.ensure_connected()
-            spx_quote = await vix_spx.get_spx(self.ib, self.exchange, self.currency, self.spx_symbol, self.ib_connector, self.logger)
+            spx_quote = await vix_spx.get_spx(self.ib, self.exchange_index, self.currency, self.spx_symbol, self.ib_connector, self.logger)
             self.logger.info(f"spx_quote... {spx_quote}")
             
         except Exception as e: 
@@ -69,7 +70,7 @@ class pre_market_checks:
         spx_open = None
         try: 
             await self.ib_connector.ensure_connected()
-            spx_close =await vix_spx.get_spx_close(self.ib, self.exchange, self.currency, self.spx_symbol, self.ib_connector, self.logger)
+            spx_close =await vix_spx.get_spx_close(self.ib, self.exchange_index, self.currency, self.spx_symbol, self.ib_connector, self.logger)
         except: 
             pass
         
