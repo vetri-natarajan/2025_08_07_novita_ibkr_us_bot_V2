@@ -8,7 +8,7 @@ from tqdm import tqdm
 import pytz
 
 class HistoricalDataFetcher:
-    def __init__(self, ib: IB, config_dict, watchlist_main_settings, logger, data_dir):
+    def __init__(self, ib: IB, config_dict, watchlist_main_settings, logger, ib_connector, data_dir):
         self.ib = ib
         self.time_zone = config_dict['trading_time_zone']
         self.max_days_per_request = 30  # IB max approx for 1-min+ bars
@@ -18,6 +18,7 @@ class HistoricalDataFetcher:
         self.spx_symbol = config_dict['spx_symbol']
         self.vix_symbol = config_dict['vix_symbol']
         self.logger = logger
+        self.ib_connector = ib_connector
         self.data_dir = data_dir
         
         os.makedirs(data_dir, exist_ok=True)
@@ -94,6 +95,7 @@ class HistoricalDataFetcher:
             
             #print(contract, end_str, duration_str, bar_size_setting)
             try:
+                await self.ib_connector.ensure_connected()
                 partial_bars = await self.ib.reqHistoricalDataAsync(
                     contract,
                     endDateTime=end_str,

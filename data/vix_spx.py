@@ -12,11 +12,12 @@ Purpose:
 import asyncio
 from ib_async import Index, Stock
 
-async def get_vix(ib, exchange, currency, vix_symbol, logger):
+async def get_vix(ib, exchange, currency, vix_symbol, ib_connector, logger):
     logger.info("🔍 Initiating VIX data fetch: exchange=%s, currency=%s", exchange, currency)
     vix_contract = Index(symbol=vix_symbol, exchange=exchange, currency=currency)
     logger.info(f"⏲️ vix contract ==> {vix_contract}.")
     try:
+        await ib_connector.ensure_connected()
         ticker = ib.reqMktData(vix_contract, snapshot=True, regulatorySnapshot=False)
         logger.info("🛰️ Requested market data for VIX contract.")
         await asyncio.sleep(0.5)
@@ -31,7 +32,7 @@ async def get_vix(ib, exchange, currency, vix_symbol, logger):
             logger.info("ℹ️ Used VIX close price instead: %s", value)
         else:
             logger.warning("⚠️ Neither last nor close price available for VIX ticker.")
-
+        await ib_connector.ensure_connected()
         ib.cancelMktData(vix_contract)
         logger.info("🛑 Cancelled VIX market data subscription.")
 
@@ -45,11 +46,12 @@ async def get_vix(ib, exchange, currency, vix_symbol, logger):
         logger.exception("🚨 Exception occurred while fetching VIX: %s", e)
         raise
 
-async def get_spx(ib, exchange, currency, spx_symbol, logger):
+async def get_spx(ib, exchange, currency, spx_symbol, ib_connector, logger):
     logger.info("🔍 Initiating SPX data fetch: exchange=%s, currency=%s", exchange, currency)
     spx_contract = Index(symbol=spx_symbol, exchange=exchange, currency=currency)
     
     try:
+        await ib_connector.ensure_connected()
         ticker = ib.reqMktData(spx_contract, snapshot=True, regulatorySnapshot=False)
         logger.info("🛰️ Requested market data for SPX contract.")
         await asyncio.sleep(0.5)
@@ -64,7 +66,7 @@ async def get_spx(ib, exchange, currency, spx_symbol, logger):
             logger.info("ℹ️ Used SPX close price instead: %s", value)
         else:
             logger.warning("⚠️ Neither last nor close price available for SPX ticker.")
-
+        await ib_connector.ensure_connected()
         ib.cancelMktData(spx_contract)
         logger.info("🛑 Cancelled SPX market data subscription.")
 
@@ -78,28 +80,30 @@ async def get_spx(ib, exchange, currency, spx_symbol, logger):
         logger.exception("🚨 Exception occurred while fetching SPX: %s", e)
         raise
 
-async def get_spx_close(ib, exchange, currency, logger):
+async def get_spx_close(ib, exchange, currency, vix_symbol, ib_connector, logger):
     logger.info("🔍 Fetching SPX previous close: exchange=%s, currency=%s", exchange, currency)
-    spy_contract = Index(symbol="SPX", exchange=exchange, currency=currency)
-    
+    spx_contract = Index(symbol=vix_symbol, exchange=exchange, currency=currency)
+    logger.info(f'spx_contract===> {spx_contract}')
     try:
+        await ib_connector.ensure_connected()
         bars = ib.reqHistoricalData(
-            spy_contract,
+            spx_contract,
             endDateTime='',
-            durationStr='1 D',
+            durationStr='2 D',
             barSizeSetting='1 day',
             whatToShow='TRADES',
             useRTH=True,
         )
-        logger.info("📊 Requested 1-day historical data for SPX.")
+        logger.info("📊 Requested 2-day historical data for SPX.")
+        await asyncio.sleep(1)
 
         if not bars:
             logger.warning("⚠️ No historical bars returned for SPX.")
             return None
 
-        spy_close = float(bars["close"][-1])
-        logger.info("✅ Fetched SPX close price: %s", spy_close)
-        return spy_close
+        spx_close = float(bars[-1].close)
+        logger.info("✅ Fetched SPX close price: %s", spx_close)
+        return spx_close
     except Exception as e:
         logger.exception("🚨 Exception during SPX close fetch: %s", e)
         raise

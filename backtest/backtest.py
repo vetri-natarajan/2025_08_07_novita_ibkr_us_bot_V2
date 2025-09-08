@@ -18,6 +18,7 @@ from utils.ensure_utc import ensure_utc
 from utils.time_to_str import time_to_str
 from utils.make_path import make_path
 from utils.is_in_trading_window import is_time_in_trading_windows
+from utils.ensure_directory import ensure_directory
 
 class PreMarketChecksBacktest:
     def __init__(self, historical_vix: pd.DataFrame, historical_spx: pd.DataFrame, config_dict: dict, logger):
@@ -28,6 +29,7 @@ class PreMarketChecksBacktest:
         self.trading_windows = config_dict.get("trading_windows", {})
         self.test_run = config_dict.get("test_run", False)
         self.logger.info("🛠️ Initialized PreMarketChecksBacktest")
+        self.skip_backtest_vix = config_dict["skip_backtest_vix"]
 
     def validate_config(self) -> tuple:
         self.logger.info("🔍 Validating config...")
@@ -39,6 +41,8 @@ class PreMarketChecksBacktest:
 
     def get_close_price(self, df: pd.DataFrame, date: dt.date) -> float:
         try:
+            print("df ===>")
+            print(df)
             return df.loc[df.index.date == date]['close'].iloc[-1]
         except (IndexError, KeyError):
             self.logger.warning(f"⚠️ No close price found for {date}")
@@ -53,8 +57,10 @@ class PreMarketChecksBacktest:
             self.logger.warning(f"⚠️ {msg}")
             return False, msg
         expected_daily_move = spx_quote / 16
-
-        if vix_val/1000 > expected_daily_move:
+        
+        if self.skip_backtest_vix: #for testing only
+            return True, ""
+        elif vix_val > expected_daily_move:
             msg = f"Rule of 16 failed (VIX too high) on {date}"
             self.logger.warning(f"⚠️ {msg}")
             return False, msg
@@ -91,20 +97,21 @@ class BacktestEngine:
         self.logger.info("🛠️ Initialized BacktestEngine")
 
     def start_backtest_logging(self, backtest_log_path):
+        
         if self.backtest_file_handler is None:
             backtest_handler = logging.FileHandler(backtest_log_path)
             formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
             backtest_handler.setFormatter(formatter)
             self.logger.addHandler(backtest_handler)
             self.backtest_file_handler = backtest_handler
-            self.logger.info(f"Backtest logging started in {backtest_log_path}")
+            self.logger.info(f"🚀 Backtest logging started in {backtest_log_path}")
 
     def stop_backtest_logging(self):
         if self.backtest_file_handler:
             self.logger.removeHandler(self.backtest_file_handler)
             self.backtest_file_handler.close()
             self.backtest_file_handler = None
-            self.logger.info("Backtest logging stopped")
+            self.logger.info("⏹️ Backtest logging stopped")
 
     def compute_qty(self, price):
         units = int(self.cfg.get("trading_units", 5))
@@ -175,7 +182,8 @@ class BacktestEngine:
             writer.writerow(["date", "conditions_met", "message"])
             for date, passed, reason in daily_checks:
                 writer.writerow([date.strftime("%Y-%m-%d"), passed, reason])
-        self.logger.info(f"Daily checks report saved to {filepath}")
+        self.logger.info(f"💾 Daily checks report saved to {filepath}")
+
 
 
 
@@ -193,6 +201,7 @@ class BacktestEngine:
     ):
         config_directory = config_dict.get("config_directory", "")
         backtest_dir = config_dict['backtest_directory']  
+        check_directory = ensure_directory(backtest_dir, self.logger)
         now = dt.datetime.now()
         timestamp_str = time_to_str(now, only_date=True)
         backtest_additional_log_file = f"backtest_additional_{timestamp_str}.log"      
@@ -412,4 +421,4 @@ class BacktestEngine:
             writer.writerow(header)
             writer.writerows(rows)
 
-        self.logger.info(f"Backtest trades report saved to {filepath}")
+        self.logger.info(f"💾 Backtest trades report saved to {filepath}")

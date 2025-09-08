@@ -66,6 +66,8 @@ def get_config_inputs():
         test_run = parse_bool(conf["TRADING"]["test_run"])
         trade_time_out_secs = int(conf["TRADING"]["trade_time_out_secs"])
         auto_trade_save_secs = int(conf["TRADING"]["auto_trade_save_secs"])
+        skip_backtest_vix = parse_bool(conf["TRADING"]["skip_backtest_vix"])
+        
         
 
         # --- LOGGING ---
@@ -108,6 +110,7 @@ def get_config_inputs():
             "test_run": test_run,
             "trade_time_out_secs" : trade_time_out_secs,
             "auto_trade_save_secs" : auto_trade_save_secs,
+            "skip_backtest_vix" : skip_backtest_vix,
             "config_directory": config_directory,
             "trade_reporter_file": trade_reporter_file,
             "trade_state_file": trade_state_file,

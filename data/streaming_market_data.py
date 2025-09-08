@@ -99,10 +99,11 @@ class BarAggregator:
             return dt.replace(hour=new_hour, minute=new_minute, second=0, microsecond=0)
 
 class StreamingData:
-    def __init__(self, ib: IB, logger: logging.Logger, trading_time_zone, buffer_limit: int = 1000):
+    def __init__(self, ib: IB, logger: logging.Logger, trading_time_zone, ib_connector, buffer_limit: int = 1000):
         self.ib = ib
         self.logger = logger
         self.time_zone = trading_time_zone
+        self.ib_connector = ib_connector
         self.buffer_limit = buffer_limit
         self.bars = None
         self.executor = ThreadPoolExecutor(max_workers=5)
@@ -169,6 +170,7 @@ class StreamingData:
             self.logger.info(f"⌛️ Using default duration string {duration_str} for {contract.symbol} {timeframe}")
 
         try:
+            await self.ib_connector.ensure_connected()
             bars_raw = await asyncio.get_event_loop().run_in_executor(
                 self.executor,
                 lambda: self.ib.reqHistoricalData(
@@ -205,6 +207,7 @@ class StreamingData:
         return df
 
     async def subscribe_live_ticks(self, symbol: str):
+        await self.ib_connector.ensure_connected()
         if symbol in self.live_tick_subscriptions:
             return True
         contract = self._subscriptions.get(symbol, {}).get('5 secs', {}).get('contract')
@@ -224,6 +227,7 @@ class StreamingData:
             return False
 
     async def unsubscribe_live_ticks(self, symbol: str):
+        await self.ib_connector.ensure_connected()
         if symbol not in self.live_tick_subscriptions:
             return
         ticker = self.tickers.get(symbol)
@@ -243,6 +247,7 @@ class StreamingData:
         #self.logger.debug(f"Market data update for {symbol}: Last Price = {last_price}")
 
     async def subscribe(self, contract: Contract, timeframe: str, max_tf: str, max_look_back: int) -> bool:
+        await self.ib_connector.ensure_connected()
         symbol = contract.symbol
 
         async with self._lock:
@@ -261,6 +266,7 @@ class StreamingData:
 
             try:
                 if not self._stream_subscribed:
+                    await self.ib_connector.ensure_connected()
                     bars = self.ib.reqRealTimeBars(contract, 5, "TRADES", useRTH=True)
                     bars.updateEvent += functools.partial(self._on_bar_update, symbol=symbol, timeframe='5 secs')
                     self._subscriptions[symbol]['5 secs'] = {'contract': contract, 'bars': bars}
@@ -398,6 +404,7 @@ class StreamingData:
             await self._fire_callbacks(symbol, timeframe, df)
 
     async def _fire_callbacks(self, symbol: str, timeframe: str, df: pd.DataFrame):
+        await self.ib_connector.ensure_connected()
         key = (symbol, timeframe)
         callbacks = self._callbacks.get(key, [])
         if not callbacks:
@@ -421,6 +428,7 @@ class StreamingData:
         return self._data_cache.get(symbol, {}).get(timeframe)
 
     async def unsubscribe(self, symbol: str):
+        await self.ib_connector.ensure_connected()
         async with self._lock:
             subs = self._subscriptions.pop(symbol, {})
             for tf, info in subs.items():
@@ -435,6 +443,7 @@ class StreamingData:
             self.logger.info(f"🗑️ Cleared data cache and subscriptions for {symbol}")
 
     async def close(self):
+        await self.ib_connector.ensure_connected()
         async with self._lock:
             symbols = list(self._subscriptions.keys())
             for sym in symbols:

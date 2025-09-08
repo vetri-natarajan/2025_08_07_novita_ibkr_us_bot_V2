@@ -81,7 +81,7 @@ ib = IB()
 htf_signals = {}
 mtf_signals = {}
 
-async def run_backtest_entrypoint(ib, account_value):    
+async def run_backtest_entrypoint(ib, account_value, ib_connector):    
     logger.info("🔍📈 Entering backtest module")
     import datetime as dt
     end_time = dt.datetime.now()
@@ -92,6 +92,7 @@ async def run_backtest_entrypoint(ib, account_value):
         config_dict=config_dict,
         watchlist_main_settings=watchlist_main_settings,
         logger=logger,
+        ib_connector = ib_connector,
         data_dir=data_directory
     )
     start_time = fetcher.get_start_time(end_time, duration_value, duration_unit)
@@ -254,15 +255,16 @@ async def poll_partial_bars(streaming_data: StreamingData, symbol: str, timefram
         await asyncio.sleep(5)
 
 async def run_live_mode(ib_connector):
+    await ib_connector.ensure_connected()
     
     account_value = trading_capital
     market_data = MarketData(ib)
-    streaming_data = StreamingData(ib, logger, trading_time_zone)
+    streaming_data = StreamingData(ib, logger, trading_time_zone, ib_connector)
     loss_tracker = loss_tracker_class(loss_halt_count, loss_halt_duration_hours, trade_state_file)
-    pre_market = pre_market_checks(ib, config_dict, loss_tracker, vix_symbol, spx_symbol, logger)
+    pre_market = pre_market_checks(ib, config_dict, loss_tracker, vix_symbol, spx_symbol, ib_connector,  logger)
     trade_reporter = trade_reporter_class(trade_reporter_file, logger)
     order_manager = order_manager_class(ib, trade_reporter, loss_tracker, order_manager_state_file,
-                                        trade_time_out_secs, auto_trade_save_secs, config_dict, watchlist_main_settings, streaming_data, logger)
+                                        trade_time_out_secs, auto_trade_save_secs, config_dict, watchlist_main_settings, streaming_data, ib_connector, logger)
     await order_manager.load_state(market_data, ib)
     passed, reason = await pre_market.run_checks()
     if not passed:
@@ -270,7 +272,7 @@ async def run_live_mode(ib_connector):
         return
     logger.info("✅ All Pre-market checks passed")
     try:
-        vix = await get_vix(ib, exchange, currency, vix_symbol, logger)
+        vix = await get_vix(ib, exchange, currency, vix_symbol, ib_connector, logger)
     except Exception:
         vix = vix_threshold
         
@@ -313,6 +315,7 @@ async def run_live_mode(ib_connector):
     logger.info(f"✅ Subscribed and set handlers for all timeframes for {symbol}")
     try:
         while True:
+            await ib_connector.ensure_connected()
             await asyncio.sleep(60)
     finally:
         await streaming_data.close()
@@ -320,14 +323,15 @@ async def run_live_mode(ib_connector):
 
 
 async def main():
-    ib_connector = ibkr_connector(account_type, ib, ibkr_client_id)
+    ib_connector = ibkr_connector(account_type, ib, ibkr_client_id, logger)
     asyncio.create_task(ib_connector.connect())
-    while not ib.isConnected():
-        await asyncio.sleep(0.2)
+
+    ib_connector.ensure_connected()
+    
     logger.info(f"⚙️ Run mode: {run_mode}")
     if run_mode == "BACKTEST":
         account_value = trading_capital
-        await run_backtest_entrypoint(ib, account_value)
+        await run_backtest_entrypoint(ib, account_value, ib_connector)
     else:
         await run_live_mode(ib_connector)
 

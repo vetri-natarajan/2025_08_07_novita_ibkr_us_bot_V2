@@ -18,7 +18,8 @@ class order_manager_class:
                  auto_trade_save_secs, 
                  config_dict,
                  watchlist_main_settings,
-                 market_data,      # Added streaming market_data instance
+                 market_data,
+                 ib_connector,
                  logger):
         
         self.logger = logger
@@ -39,6 +40,7 @@ class order_manager_class:
         self.currency = config_dict['currency']
         self.watchlist_main_settings = watchlist_main_settings
         self.market_data = market_data  # Store streaming market data object
+        self.ib_connector  = ib_connector
         self.logger.info("✅ Order manager initialized successfully")
 
     async def place_market_entry_with_bracket(self, 
@@ -55,6 +57,7 @@ class order_manager_class:
             return None            
 
         order = MarketOrder(side.upper(), qty)
+        await self.ib_connector.ensure_connected()
         parent_order =  self.ib.placeOrder(contract, order)
         await parent_order.filledEvent
         
@@ -115,6 +118,7 @@ class order_manager_class:
         # 1. Wait for parent order fill or timeout
         for i in range(self.trade_timeout_secs * 2):
             await asyncio.sleep(0.5)
+            await self.ib_connector.ensure_connected()
             trades = self.ib.trades()
             parent_trade = None
             for t in trades:
@@ -151,6 +155,7 @@ class order_manager_class:
                 sl_side = "SELL" if side == "BUY" else "BUY"
                 stop_order = StopOrder(sl_side, qty, record["sl_price"])
                 try:
+                    await self.ib_connector.ensure_connected()
                     sl_trade = self.ib.placeOrder(contract, stop_order)
                     record["sl_order_id"] = getattr(sl_trade.orderStatus, "permId", None)
                     self.logger.info("✅ Placed Stop order for %s at %s", trade_id, record["sl_price"])
@@ -161,6 +166,7 @@ class order_manager_class:
                 tp_side = "SELL" if side == "BUY" else "BUY"
                 limit_order = LimitOrder(tp_side, qty, record["tp_price"])
                 try:
+                    await self.ib_connector.ensure_connected()
                     tp_trade = self.ib.placeOrder(contract, limit_order)
                     record["tp_order_id"] = getattr(tp_trade.orderStatus, "permId", None)
                     self.logger.info("✅ Placed Limit order for %s at %s", trade_id, record["tp_price"])
@@ -180,7 +186,7 @@ class order_manager_class:
             # Continuous monitoring loop without timeout for dynamic SL/TP and qty
             while True:
                 await asyncio.sleep(0.5)
-
+                
                 current_price = self.get_live_price(symbol)
                 vwap = self.get_vwap(symbol, ltf='1min')
                 if vwap is None:
@@ -250,6 +256,7 @@ class order_manager_class:
             existing_order_id = record.get(order_id_key)
             if existing_order_id is not None:
                 ib_order = None
+                await self.ib_connector.ensure_connected()
                 for o in self.ib.orders():
                     if getattr(o, "permId", None) == existing_order_id:
                         ib_order = o
@@ -259,6 +266,7 @@ class order_manager_class:
                     ib_order.totalQuantity = qty
                     # For StopOrder, price usually stored in 'auxPrice'
                     ib_order.auxPrice = new_price
+                    await self.ib_connector.ensure_connected()
                     self.ib.placeOrder(contract, ib_order)
                     self.logger.info(f"✅ Modified existing STOP order in place for {trade_id} at {new_price} qty {qty}")
                     return
@@ -277,6 +285,7 @@ class order_manager_class:
         if existing_order_id is not None:
             for ib_order in self.ib.orders():
                 if getattr(ib_order, "permId", None) == existing_order_id:
+                    await self.ib_connector.ensure_connected()
                     self.ib.cancelOrder(ib_order)
                     self.logger.info(f"✅ Cancelled existing STOP order {existing_order_id} for {trade_id}")
                     break
@@ -295,6 +304,7 @@ class order_manager_class:
             existing_order_id = record.get(order_id_key)
             if existing_order_id is not None:
                 ib_order = None
+                await self.ib_connector.ensure_connected()
                 for o in self.ib.orders():
                     if getattr(o, "permId", None) == existing_order_id:
                         ib_order = o
@@ -304,6 +314,7 @@ class order_manager_class:
                     ib_order.totalQuantity = qty
                     # For LimitOrder, price stored in 'lmtPrice'
                     ib_order.lmtPrice = new_price
+                    await self.ib_connector.ensure_connected()
                     self.ib.placeOrder(contract, ib_order)
                     self.logger.info(f"✅ Modified existing LIMIT order in place for {trade_id} at {new_price} qty {qty}")
                     return
@@ -320,6 +331,7 @@ class order_manager_class:
         order_id_key = "tp_order_id"
         existing_order_id = record.get(order_id_key)
         if existing_order_id is not None:
+            await self.ib_connector.ensure_connected()
             for ib_order in self.ib.orders():
                 if getattr(ib_order, "permId", None) == existing_order_id:
                     self.ib.cancelOrder(ib_order)
@@ -327,6 +339,7 @@ class order_manager_class:
                     break
         tp_side = "SELL" if side == "BUY" else "BUY"
         limit_order = LimitOrder(tp_side, qty, new_price)
+        await self.ib_connector.ensure_connected()
         tp_trade = self.ib.placeOrder(contract, limit_order)
         record[order_id_key] = getattr(tp_trade.orderStatus, "permId", None)
         self.logger.info(f"✅ Placed new LIMIT order for {trade_id} at {new_price} qty {qty}")
@@ -384,6 +397,7 @@ class order_manager_class:
         try:
             # Place market order to close partial quantity
             order = MarketOrder(sell_side, partial_qty)
+            await self.ib_connector.ensure_connected()
             trade = self.ib.placeOrder(contract, order)
             await trade.filledEvent  # Wait for fill event (optional)
             self.logger.info(f"✅ Partial profit taken for {trade_id}, closed {partial_qty} shares out of {qty}")
@@ -407,11 +421,23 @@ class order_manager_class:
             sl_order_id = record.get("sl_order_id")
             tp_order_id = record.get("tp_order_id")
             for oid in filter(None, [sl_order_id, tp_order_id]):
+                await self.ib_connector.ensure_connected()
                 for ib_order in self.ib.orders():
                     if getattr(ib_order, "permId", None) == oid:
+                        await self.ib_connector.ensure_connected()
                         self.ib.cancelOrder(ib_order)
                         self.logger.info(f"✅ Cancelled order {oid} during exit for {trade_id}")
-            # TODO: Place market order to close position
+            qty = record.get("qty", 0)
+            if qty > 0:
+                contract = record.get("contract")
+                side = record.get("side")
+                # Opposite side to close position
+                close_side = "SELL" if side == "BUY" else "BUY"
+                close_order = MarketOrder(close_side, qty)
+                await self.ib_connector.ensure_connected()
+                close_trade = self.ib.placeOrder(contract, close_order)
+                await close_trade.filledEvent  # Optionally wait for fill
+                self.logger.info(f"✅ Placed market order to close {qty} shares for {trade_id} side {close_side}")
             del self.active_trades[trade_id]
         except Exception as e:
             self.logger.exception(f"❌ Error during execute_trade_exit for {trade_id}: {e}")
@@ -442,6 +468,7 @@ class order_manager_class:
                     return
     
             try:
+                await self.ib_connector.ensure_connected()
                 positions = self.ib.positions()
             except Exception:
                 positions = []
@@ -463,6 +490,7 @@ class order_manager_class:
                 exit_fill_quantities = []
     
                 try:
+                    await self.ib_connector.ensure_connected()
                     trades = self.ib.trades()
                     for trade in trades:
                         if getattr(trade, "OrderId", None) in exit_order_ids:

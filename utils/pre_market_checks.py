@@ -23,7 +23,7 @@ from utils.is_in_trading_window import is_time_in_trading_windows
 
 
 class pre_market_checks:
-    def __init__(self, ib, config_dict: dict, loss_tracker:loss_tracker_class,  vix_symbol, spx_symbol, logger):
+    def __init__(self, ib, config_dict: dict, loss_tracker:loss_tracker_class,  vix_symbol, spx_symbol, ib_connector, logger):
         self.ib = ib
         self.config_dict = config_dict
         self.loss_tracker_class = loss_tracker
@@ -34,6 +34,7 @@ class pre_market_checks:
         #print("trading_windows ===>", self.trading_windows)
         self.vix_symbol = vix_symbol
         self.spx_symbol = spx_symbol
+        self.ib_connector = ib_connector
         self.logger = logger
         
     async def run_checks(self) -> Tuple[bool, str]:
@@ -53,9 +54,11 @@ class pre_market_checks:
         #3. vix related
         self.logger.info("📊 Getting VIX and SPY data for Rule of 16 analysis... ⚡️📈")
         try: 
-            vix_val = await vix_spx.get_vix(self.ib, self.exchange, self.currency, self.vix_symbol,  self.logger)
+            await self.ib_connector.ensure_connected()
+            vix_val = await vix_spx.get_vix(self.ib, self.exchange, self.currency, self.vix_symbol,  self.ib_connector, self.logger)
             self.logger.info(f"vix value... {vix_val}")
-            spx_quote = await vix_spx.get_spx(self.ib, self.exchange, self.currency, self.spx_symbol, self.logger)
+            await self.ib_connector.ensure_connected()
+            spx_quote = await vix_spx.get_spx(self.ib, self.exchange, self.currency, self.spx_symbol, self.ib_connector, self.logger)
             self.logger.info(f"spx_quote... {spx_quote}")
             
         except Exception as e: 
@@ -65,12 +68,15 @@ class pre_market_checks:
         
         spx_open = None
         try: 
-            spx_close =await vix_spx.get_spx_close(self.ib, self.exchange, self.currency)
+            await self.ib_connector.ensure_connected()
+            spx_close =await vix_spx.get_spx_close(self.ib, self.exchange, self.currency, self.spx_symbol, self.ib_connector, self.logger)
         except: 
             pass
         
         if spx_open:
             outside = vix_spx.rule_of_16_calculation(vix_val, spx_quote, spx_close)
+            if self.config_dict['skip_backtest_vix']:
+                outside = False
             if outside: 
                 msg = "SPX is outside expected Range (Rule of 16)"
                 return False, msg

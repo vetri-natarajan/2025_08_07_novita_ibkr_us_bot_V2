@@ -4,7 +4,7 @@ save_data_on_exit = True
 save_history = True
 save_non_project_files = False
 project_type = 'empty-project-type'
-recent_files = ['issues.txt', 'main.py', 'backtest\\backtest.py', 'config\\inputs.cfg', 'config\\config_parser.py', 'execution\\ibkr_connector.py', 'utils\\logger.py', 'config\\read_ta_settings.py', 'strategies\\scalping_strategy.py', 'data\\historical_data_fetcher.py', 'indicators\\vwap.py']
+recent_files = ['issues.txt', 'main.py', 'backtest\\backtest.py', 'config\\inputs.cfg', 'config\\config_parser.py', 'execution\\ibkr_connector.py', 'data\\vix_spx.py', 'utils\\pre_market_checks.py', '..\\..\\reference\\get_vix_proper_error_handling.py', 'data\\historical_data_fetcher.py', 'utils\\ensure_directory.py']
 
 [main]
 version = 0.2.0
