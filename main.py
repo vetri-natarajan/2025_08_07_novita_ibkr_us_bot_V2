@@ -301,7 +301,7 @@ async def run_live_mode(ib_connector):
                                      vix=vix,
                                      logger=logger)
             streaming_data.on_bar(symbol, tf, on_bar_handler_wrapper)
-            asyncio.create_task(poll_partial_bars(streaming_data, symbol, tf))
+            #asyncio.create_task(poll_partial_bars(streaming_data, symbol, tf))
 
             # Immediately fire the callback with seeded historical bars to check initial conditions
             seeded_df = streaming_data.get_latest(symbol, tf)

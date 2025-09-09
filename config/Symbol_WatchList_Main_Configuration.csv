@@ -1,2 +1,2 @@
 Symbol,Hi to Lo TF,HHLL,Entry Decision,Mode,Total Gain,Each Gain,Volatility,Volume Confirm,Max Draw down,Exit,SL,TP
-RELIANCE,"30m,5m,1m",1,breakout,Scalping,~0.28% ? 0.70%,~0.09%/ 0.7%,~0.09%/ 0.23%,H,1%,E1,0.5,1.5
+RELIANCE,"3m,2m,1m",1,breakout,Scalping,~0.28% ? 0.70%,~0.09%/ 0.7%,~0.09%/ 0.23%,H,1%,E1,0.5,1.5

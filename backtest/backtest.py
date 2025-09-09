@@ -319,9 +319,9 @@ class BacktestEngine:
                                 sl_pct=exit_sl_input,
                                 tp_pct=exit_tp_input
                             )
-                        else:  # ATR
+                        elif exit_method == "E2":  # ATR
                             try:
-                                atr_val = float(calculate_atr(df_LTF_slice, 14).iloc[-1])
+                                atr_val = float(calculate_atr(df_LTF_slice, 5).iloc[-1])
                             except Exception:
                                 atr_val = None
                             if atr_val is not None:
