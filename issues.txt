@@ -51,3 +51,6 @@
 51. make sure ib is connected.... - done
 52. in check_ltf moduel, the berakout voule is for the last candle ony
 53. not taking port ids properly for ib-gateway
+54. \GitProjects\client\2025_07_28_novita_ibkr_old_us_strategy_rules\code\actual\ibkr_us_bot\data\streaming_market_data.py:455: FutureWarning: The behavior of DataFrame concatenation with empty or all-NA entries is deprecated. In a future version, this will no longer exclude empty or all-NA columns when determining the result dtypes. To retain the old behavior, exclude the relevant entries before the concat operation.
+  df = pd.concat([df, df_new])
+

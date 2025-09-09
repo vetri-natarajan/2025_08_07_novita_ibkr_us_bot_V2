@@ -63,6 +63,12 @@ def floor_time_to_tf(dt: datetime, target_tf: str, tz) -> datetime:
         return dt.replace(second=(dt.second // 5) * 5, microsecond=0)
     if target_tf == '1 min':
         return dt.replace(second=0, microsecond=0)
+    if target_tf == '2 mins':
+        m = (dt.minute // 2) * 2
+        return dt.replace(minute=m, second=0, microsecond=0)
+    if target_tf == '3 mins':
+        m = (dt.minute // 3) * 3
+        return dt.replace(minute=m, second=0, microsecond=0)
     if target_tf == '5 mins':
         m = (dt.minute // 5) * 5
         return dt.replace(minute=m, second=0, microsecond=0)
@@ -241,7 +247,8 @@ class StreamingData:
             return None
 
         # Normalize timezone consistently (assume IB returns naive UTC; adjust if needed)
-        df['date'] = pd.to_datetime(df['date'], utc=True)
+        #df['date'] = pd.to_datetime(df['date'], utc=True)
+        df['date'] = pd.to_datetime(df['date'], utc=False)
         df.set_index('date', inplace=True)
 
         required_cols = ['open', 'high', 'low', 'close', 'volume']
@@ -483,7 +490,8 @@ class StreamingData:
                     # Fallback if column subset fails
                     self.logger.info(f"🧾 Last {min(n, len(df))} rows for {symbol} [{tf}] after 1-min complete:\n{df.tail(n)}")
             else:
-                self.logger.info(f"🧾 No data yet for {symbol} [{tf}] after 1-min complete.")
+                pass
+                #self.logger.info(f"🧾 No data yet for {symbol} [{tf}] after 1-min complete.")
 
     async def _fire_callbacks(self, symbol: str, timeframe: str, df: pd.DataFrame):
         await self.ib_connector.ensure_connected()
