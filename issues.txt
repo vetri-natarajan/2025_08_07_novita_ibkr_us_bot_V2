@@ -26,8 +26,8 @@
 26. Error 321, reqId 16: Error validating request.-'bK' : cause - Historical data request for durations longer than 52 weeks must be made in years., contract: Stock(symbol='SBIN', exchange='NSE', currency='INR')
 27. in marketdadta py 54 weeks has been givena s inpus..
 28. include skip, skip parameters..
-29. dynamic stop loss not impleemntd...
-30. hedge stop loss not implemented...
+29. dynamic stop loss not impleemntd... - done
+30. hedge stop loss not implemented... - done
 31. check config file input types..
 32. check the order id issue in monitor fil and attach...
 33. qty is computed as zero...
@@ -37,10 +37,10 @@
 37. have to place brackert order
 38. vix is alwyas form the higher timefraem
 39. rule fo sixteen made alsway true
-40. for backtesing fully sending all the data frame instead of slices
-41. max look back in scalipin backes mtf, ltf conditoin sis50
+40. for backtesing fully sending all the data frame instead of slices - closed
+41. max look back in scalipin backes mtf, ltf conditoin sis50 - done
 42. seed minutes in subscribe marekt data should change..
-43. after timewouts, restarts, all the modules should reliably connect back...
+43. after timewouts, restarts, all the modules should reliably connect back... - done
 44. check wheter ltp is crossed... not 1 m bar...
 45. backetest timeframe has to be changed based on the indicator time settins...
 46. obv is it days or the last n bars?
@@ -48,5 +48,6 @@
 48. there is bufferlimit in seed historical...
 49. backtesteer reads everytime the symbol... that should not be
 50. in main mdule rn_llive_mode thee is vix = vix_threshold
-51. make sure ib is connected....
+51. make sure ib is connected.... - done
 52. in check_ltf moduel, the berakout voule is for the last candle ony
+53. not taking port ids properly for ib-gateway
