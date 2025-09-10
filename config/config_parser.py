@@ -69,6 +69,8 @@ def get_config_inputs():
         auto_trade_save_secs = int(conf["TRADING"]["auto_trade_save_secs"])
         skip_backtest_vix = parse_bool(conf["TRADING"]["skip_backtest_vix"])
         
+        # --- TESTING ---
+        order_testing = parse_bool(conf["TESTING"]["order_testing"])
         
 
         # --- LOGGING ---
@@ -110,6 +112,7 @@ def get_config_inputs():
             "vix_reduction_factor": vix_reduction_factor,
             "skip_on_high_vix": skip_on_high_vix,
             "test_run": test_run,
+            "order_testing": order_testing,
             "trade_time_out_secs" : trade_time_out_secs,
             "auto_trade_save_secs" : auto_trade_save_secs,
             "skip_backtest_vix" : skip_backtest_vix,

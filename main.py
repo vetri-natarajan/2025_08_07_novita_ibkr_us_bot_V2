@@ -61,6 +61,7 @@ vix_threshold = config_dict["vix_threshold"]
 vix_reduction_factor = config_dict["vix_reduction_factor"]
 skip_on_high_vix = config_dict["skip_on_high_vix"]
 test_run = config_dict["test_run"]
+order_testing = config_dict["order_testing"]
 trade_time_out_secs = config_dict["trade_time_out_secs"]
 auto_trade_save_secs = config_dict["auto_trade_save_secs"]
 config_directory = config_dict["config_directory"]
@@ -215,8 +216,13 @@ async def on_bar_handler(symbol, timeframe, df, market_data,ta_settings, max_loo
     
     logger.info(f"TA settings loaded for {symbol}")
     if timeframe == HTF:
-        htf_signals[symbol] = check_HTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df, logger)
+        if not order_testing:
+            htf_signals[symbol] = check_HTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df, logger)
+        else:
+            htf_signals[symbol] = True
+            
         signal = htf_signals[symbol]
+        
         if signal:
             await market_data.subscribe_live_ticks(symbol)
             logger.info(f"🔔 Live tick subscribed for {symbol} on HTF signal")        
@@ -227,10 +233,15 @@ async def on_bar_handler(symbol, timeframe, df, market_data,ta_settings, max_loo
         emoji = "✅" if signal else "❌"
         logger.info(f"{emoji} HTF({HTF}) signal updated for {symbol}: {signal}")
     elif timeframe == MTF:
-        mtf_signals[symbol] = check_MTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df, logger)
+        if not order_testing:
+            mtf_signals[symbol] = check_MTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df, logger)
+        
+        else:
+            mtf_signals[symbol] = True
+            
         signal = htf_signals[symbol]
         emoji = "✅" if signal else "❌"
-        logger.info(f"{emoji} HTF({HTF}) signal updated for {symbol}: {signal}")
+        logger.info(f"{emoji} MTF({MTF}) signal updated for {symbol}: {signal}")
     elif timeframe == LTF:
         df_HTF = market_data.get_latest(symbol, HTF)
         df_MTF = market_data.get_latest(symbol, MTF)

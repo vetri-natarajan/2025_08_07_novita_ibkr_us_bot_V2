@@ -1,2 +1,4 @@
 Symbol,Hi to Lo TF,HHLL,Entry Decision,Mode,Total Gain,Each Gain,Volatility,Volume Confirm,Max Draw down,Exit,SL,TP
-RELIANCE,"3m,2m,1m",1,breakout,Scalping,~0.28% ? 0.70%,~0.09%/ 0.7%,~0.09%/ 0.23%,H,1%,E1,0.5,1.5
+FACT,"3m,2m,1m",1,breakout,Scalping,~0.01% ? 0.99%,~0.01%/ 0.99%,~0.01%/ 0.99%,H,10%,E1,0.1,0.1
+SBIN,"3m,2m,1m",1,breakout,Scalping,~0.01% ? 0.99%,~0.01%/ 0.99%,~0.01%/ 0.99%,H,10%,E1,0.1,0.1
+RELIANCE,"3m,2m,1m",1,breakout,Scalping,~0.01% ? 0.99%,~0.01%/ 0.99%,~0.01%/ 0.99%,H,10%,E1,0.1,0.1
