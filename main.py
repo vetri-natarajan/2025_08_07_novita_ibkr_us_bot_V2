@@ -130,7 +130,7 @@ async def run_backtest_entrypoint(ib, account_value, ib_connector):
     )
 
 async def process_trading_signals_cached(symbol, timeframe, df_HTF, df_MTF, df_LTF,
-                                         market_data, order_manager, cfg,
+                                         streaming_data, order_manager, cfg,
                                          account_value, vix, logger,
                                          watchlist_main_settings, ta_settings,
                                          max_look_back, trading_units,
@@ -146,17 +146,17 @@ async def process_trading_signals_cached(symbol, timeframe, df_HTF, df_MTF, df_L
             logger.info(f"⏸️ MTF conditions not met for {symbol}")
             return False
         live_price = None
-        ticker = market_data.tickers.get(symbol)
+        ticker = streaming_data.tickers.get(symbol)
         if ticker is not None: 
             live_price = ticker.last
         is_live = True
-        okLTF = check_LTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df_LTF, df_HTF, logger, is_live, live_price)
+        okLTF = check_LTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df_LTF, df_HTF, logger, order_testing, is_live, live_price)
         if not okLTF:
             logger.info(f"⏸️ LTF conditions not met for {symbol}")
             return False
        
         
-        ticker = market_data.tickers.get(symbol)
+        ticker = streaming_data.tickers.get(symbol)
         last_price = None
         if ticker is not None: 
             last_price = ticker.last
@@ -172,6 +172,7 @@ async def process_trading_signals_cached(symbol, timeframe, df_HTF, df_MTF, df_L
         sl_input = watchlist_main_settings[symbol]['SL']
         tp_input = watchlist_main_settings[symbol]['TP']
         
+        logger.info(f" Computed qty for [{symbol}] qty: {qty}")
         special_exit = False # for E3 and E4 exits
         if exit_method == "E1":
             sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_input, tp_input)
@@ -192,8 +193,10 @@ async def process_trading_signals_cached(symbol, timeframe, df_HTF, df_MTF, df_L
         else:
             logger.info("⚠️ Exit method not defined, taking default fixed_sl_exits.")
             sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_input, tp_input)
-            
-        contract = market_data._subscribed.get(symbol, {}).get('contract')
+        logger.info(f" Exit method for [{symbol}] Exit method: {exit_method} sl: {sl_price} tp: {tp_price}")  
+        
+        contract = streaming_data._subscriptions.get(symbol, {}).get('5 secs', {}).get('contract')
+        logger.info(f'Contract for [{symbol}] {contract}')
         if contract is None and hasattr(order_manager, 'get_contract'):
             contract = order_manager.get_contract(symbol)
         if contract is None:
@@ -204,7 +207,14 @@ async def process_trading_signals_cached(symbol, timeframe, df_HTF, df_MTF, df_L
             return False
         meta = {'signal': okLTF, 'symbol': symbol}
         
-        trade_id = await order_manager.place_market_entry_with_bracket( symbol, timeframe, contract, qty, 'BUY', sl_price, tp_price, meta, special_exit)
+        trade_id = await order_manager.place_market_entry_with_bracket( symbol,                                                     
+                                                                       contract, 
+                                                                       qty, 
+                                                                       'BUY', 
+                                                                       sl_price, 
+                                                                       tp_price, 
+                                                                       meta, 
+                                                                       special_exit)
         if trade_id:
             logger.info(f"✅ Trade placed {trade_id} for {symbol} qty {qty}")
         return trade_id is not None

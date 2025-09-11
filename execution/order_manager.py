@@ -86,23 +86,6 @@ class order_manager_class:
         await self.save_state()
         return trade_id
 
-    def get_vwap(self, symbol, ltf='1min') -> float:
-        """
-        Gets VWAP of previous completed candle in given timeframe using streaming data.
-
-        Returns None if data insufficient.
-        """
-        
-        parsed_tf = self.watchlist_main_settings[symbol]['Parsed TF']
-        ltf = parsed_tf[2]
-        df = self.market_data.get_latest(symbol, ltf)
-        if df is None or df.empty or len(df) < 2:
-            self.logger.warning(f"VWAP data insufficient for {symbol} {ltf}")
-            return None
-
-        vwaps = calculate_vwap(df)
-        # Return VWAP of the previous (complete) candle (second last index)
-        return vwaps.iloc[-2]
 
     async def _monitor_fill_and_attach_children(self, trade_id: str):
         record = self.active_trades.get(trade_id)
@@ -408,6 +391,23 @@ class order_manager_class:
         except Exception as e:
             self.logger.exception(f"❌ Partial profit failed for {trade_id} exception: {e}")
 
+    def get_vwap(self, symbol, ltf='1min') -> float:
+        """
+        Gets VWAP of previous completed candle in given timeframe using streaming data.
+
+        Returns None if data insufficient.
+        """
+        
+        parsed_tf = self.watchlist_main_settings[symbol]['Parsed TF']
+        ltf = parsed_tf[2]
+        df = self.market_data.get_latest(symbol, ltf)
+        if df is None or df.empty or len(df) < 2:
+            self.logger.warning(f"VWAP data insufficient for {symbol} {ltf}")
+            return None
+
+        vwaps = calculate_vwap(df)
+        # Return VWAP of the previous (complete) candle (second last index)
+        return vwaps.iloc[-2]
 
     async def execute_trade_exit(self, trade_id, reason=None):
         """

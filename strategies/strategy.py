@@ -39,7 +39,7 @@ def check_MTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_M
     return mtf_check(symbol, main_settings, ta_settings, max_look_back, df_MTF, logger)
 
 
-def check_LTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_LTF, df_HTF, logger, is_live = False, live_price = None):
+def check_LTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_LTF, df_HTF, logger, order_testing = False, is_live = False, live_price = None):
     if df_LTF is None:
         logger.info("❌ LTF : Dataframe is None or too short")
         return False
@@ -58,21 +58,22 @@ def check_LTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_L
     last_vol = last['volume']
 
     if entry_decision in ["BREAKOUT", "BOTH"]:
-        if not price_breakout_confirm(df_LTF, breakout_level, logger, is_live, live_price):
+        if not order_testing:
+            if not price_breakout_confirm(df_LTF, breakout_level, logger, is_live, live_price):
+                return False
+    
+            vol_confirm_input = main_settings[symbol]['Volume Confirm']
+            if not volume_confirmation(df_LTF, df_HTF, vol_confirm_input, logger):
+                return False
+    
+        if entry_decision in ["PULLBACK", "BOTH"]:
+            if not pullback_retest(df_LTF, breakout_level, logger):
+                return False
+    
+        # Technical confluence for LTF
+        ltf_timeframe = main_settings[symbol]["Parsed Raw TF"][2]
+        if not check_technical_confluence(ltf_timeframe, df_LTF, ta_settings, main_settings, logger):
+            logger.info("⚠️❌ LTF technical confluence not met")
             return False
-
-        vol_confirm_input = main_settings[symbol]['Volume Confirm']
-        if not volume_confirmation(df_LTF, df_HTF, vol_confirm_input, logger):
-            return False
-
-    if entry_decision in ["PULLBACK", "BOTH"]:
-        if not pullback_retest(df_LTF, breakout_level, logger):
-            return False
-
-    # Technical confluence for LTF
-    ltf_timeframe = main_settings[symbol]["Parsed Raw TF"][2]
-    if not check_technical_confluence(ltf_timeframe, df_LTF, ta_settings, main_settings, logger):
-        logger.info("⚠️❌ LTF technical confluence not met")
-        return False
-    logger.info("✅📈 LTF all conditions are met...")
+    logger.info(f"✅📈 LTF [{symbol}] all conditions are met...")
     return True

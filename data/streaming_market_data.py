@@ -265,17 +265,17 @@ class StreamingData:
             return True
         contract = self._subscriptions.get(symbol, {}).get('5 secs', {}).get('contract')
         if contract is None:
-            self.logger.error(f"No contract found for {symbol} to subscribe market data")
+            self.logger.error(f"🚫 No contract found for {symbol} to subscribe market data")
             return False
         try:
             ticker = self.ib.reqMktData(contract, "", False, False)
             self.tickers[symbol] = ticker
             self.live_tick_subscriptions.add(symbol)
-            self.logger.info(f"Subscribed to market data for {symbol}")
+            self.logger.info(f"📡 Subscribed to market data for {symbol}")
             ticker.updateEvent += functools.partial(self._on_ticker_update, symbol=symbol)
             return True
         except Exception as e:
-            self.logger.error(f"Failed to subscribe market data for {symbol}: {e}")
+            self.logger.error(f"🚫 Failed to subscribe market data for {symbol}: {e}")
             return False
 
     async def unsubscribe_live_ticks(self, symbol: str):
@@ -285,7 +285,7 @@ class StreamingData:
         ticker = self.tickers.get(symbol)
         if ticker:
             self.ib.cancelMktData(ticker)
-            self.logger.info(f"Unsubscribed market data for {symbol}")
+            self.logger.info(f"📴 Unsubscribed market data for {symbol}")
             del self.tickers[symbol]
         self.live_tick_subscriptions.remove(symbol)
 
