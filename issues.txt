@@ -60,3 +60,6 @@
          ^^^^^^^^^^^^^^^^^^^^^^
 FileNotFoundError: [Errno 2] No such file or directory: 'logs/states/order_state.json'
 
+
+57.rder rejected - reason:Invalid Price - rounding in update order of ordermanager.... include a round price functions...include tick size
+

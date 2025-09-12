@@ -45,7 +45,7 @@ class loss_tracker_class:
             self.consecutive_losses += 1
             if self.consecutive_losses >= self.loss_halt_count:
                 now = timestamp or dt.datetime.now(dt.timezone.utc)
-                self.halt_until = now + dt.timedelta(hours = self.halt_hours)
+                self.halt_until = now + dt.timedelta(hours = self.loss_halt_duration)
             self._save()
             
     def _save(self):

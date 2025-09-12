@@ -107,25 +107,16 @@ class order_manager_class:
                                               sl_price: float = None,
                                               tp_price: float = None, 
                                               meta : Dict = None, 
+                                              last_price: float = None, 
+                                              order_testing: bool = False,
                                               special_exit : bool = False):
         if qty <= 0: 
             self.logger.warning("⚠️ Quantity <= 0, skipping order placement")
             return None            
-        '''
-        order = MarketOrder(side.upper(), qty)
-        await self.ib_connector.ensure_connected()
-        parent_order =  self.ib.placeOrder(contract, order)
-        await parent_order.filledEvent
-        '''
-
-        '''
-        # Parent order
-        parent = LimitOrder('BUY', 100, 250.00)
-        parent.orderId = self.ib.client.getReqId()
-        parent.transmit = False
-        '''
-
-        qty = 1
+        
+        if order_testing:
+            qty = 1
+            
         parent = MarketOrder('BUY', qty)
         parent.orderId = self.ib.client.getReqId()
         parent.transmit = False
@@ -151,31 +142,36 @@ class order_manager_class:
         trades = []
         trades.append(parent_trade)
         trades.append(sl_trade)
-        trades.append(tp_trade)
-        
-        self.logger.info(f"Bracket order placed: {len(trades)} orders")
-        
-        self.logger.info(f"Parent market order: {parent_trade} orders")
-        self.logger.info(f"Stop order: {sl_trade} orders")
-        self.logger.info(f"Parent market order: {tp_trade} orders")
- 
-        
+        trades.append(tp_trade)        
         
         
         order_id = getattr(parent_trade.orderStatus, "orderId", None)
         sl_order_id = getattr(sl_trade.orderStatus, "orderId", None)
         tp_order_id = getattr(tp_trade.orderStatus, "orderId", None)
-        
-        
-        
-        self.logger.info(f'parent_order_id: {order_id} sl_order_id: {sl_order_id} tp_order_id: {tp_order_id}')
-        
-        
+
+        self.logger.info(
+            "\n"
+            "====================================\n"
+            "✅ Bracket Order Placed\n"
+            "====================================\n"
+            f"📝 Order ID: {order_id}\n"
+            f"📈 Symbol: [{symbol}]\n"
+            f"🔢 Quantity: {qty}\n"
+            f"🛑 Stoploss: {sl_price} (ID: {sl_order_id})\n"
+            f"🎯 Target: {tp_price} (ID: {tp_order_id})\n"
+            f"🔗 Parent Order ID: {order_id}\n"
+            "===================================="
+        )
+
+
+        self.logger.info(f'📝 parent_order_id: {order_id} | 🛑 sl_order_id: {sl_order_id} | 🎯 tp_order_id: {tp_order_id}')        
         trade_id = f"{symbol}-{order_id}"
         record = {
                 "symbol": symbol,
                 "contract": contract,
                 "order": parent,
+                "sl_order": stopLoss,
+                "tp_order": takeProfit,
                 "order_id": order_id,
                 "sl_order_id": sl_order_id,
                 "tp_order_id": tp_order_id,
@@ -191,16 +187,16 @@ class order_manager_class:
                 }
         
         self.active_trades[trade_id] = record
-        self.logger.info("✅ Placed b market order %s for %s qty %s", trade_id, symbol, qty)
         
-        asyncio.create_task(self._monitor_fill_and_attach_children(trade_id))
+        
+        asyncio.create_task(self._monitor_fill_and_attach_children(trade_id, last_price, order_testing))
         await self.save_state()
         return trade_id
         
         
 
 
-    async def _monitor_fill_and_attach_children(self, trade_id: str):
+    async def _monitor_fill_and_attach_children(self, trade_id: str, last_price: float, order_testing: bool):
         record = self.active_trades.get(trade_id)
         if not record:
             self.logger.warning("⚠️ No active trade record found for %s; nothing to monitor.", trade_id)
@@ -245,36 +241,6 @@ class order_manager_class:
         entry_price = record.get("fill_price") or record.get("entry_price")
         entry_time = record.get("entry_time") or datetime.datetime.utcnow()
 
-
-            
-        '''
-
-            # Place SL/TP once and start exit monitor
-        if record.get("sl_price") is not None:
-            sl_side = "SELL" if side == "BUY" else "BUY"
-            stop_order = StopOrder(sl_side, qty, record["sl_price"])
-            try:
-                await self.ib_connector.ensure_connected()
-                sl_trade = self.ib.placeOrder(contract, stop_order)
-                self.logger.info(f'sl_trade===> {sl_trade}' )
-                self.logger.info(f'sl_trade orderstatus===> {sl_trade.orderStatus}' )
-                record["sl_order_id"] = getattr(sl_trade.orderStatus, "orderId", None)
-                self.logger.info("✅ Placed Stop order for %s at %s sl_order_id %s: ", trade_id, record["sl_price"], record["sl_order_id"] )
-            except Exception as e:
-                self.logger.exception("❌ Failed to place Stop order for %s", trade_id)
-
-        if record.get("tp_price") is not None:
-            tp_side = "SELL" if side == "BUY" else "BUY"
-            limit_order = LimitOrder(tp_side, qty, record["tp_price"])
-            try:
-                await self.ib_connector.ensure_connected()
-                tp_trade = self.ib.placeOrder(contract, limit_order)
-                record["tp_order_id"] = getattr(tp_trade.orderStatus, "orderId", None)
-                self.logger.info("✅ Placed Limit order for %s at %s tp_order_id: %s ", trade_id, record["tp_price"], record["tp_order_id"])
-            except Exception as e:
-                self.logger.exception("❌ Failed to place Limit order for %s", trade_id)
-        '''  
-
         try:
             self.trade_reporter.report_trade_open(trade_id, record)
         except Exception as e:
@@ -287,13 +253,17 @@ class order_manager_class:
         if exit_method in ['E3', 'E4']:
             # Continuous monitoring loop without timeout for dynamic SL/TP and qty
             while True:
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.5)                
                 
                 current_price = self.get_live_price(symbol)
-                vwap = self.get_vwap(symbol, ltf='1min')
-                if vwap is None:
-                    self.logger.warning(f"Skipping VWAP update for {symbol} due to insufficient data")
-                    continue
+                
+                if not order_testing:                    
+                    vwap = self.get_vwap(symbol, ltf='1min')
+                    if vwap is None:
+                        self.logger.warning(f"Skipping VWAP update for {symbol} due to insufficient data")
+                        continue
+                else: 
+                    vwap = last_price*0.995
 
                 qty = record.get("qty")  # dynamic qty
 
@@ -304,46 +274,75 @@ class order_manager_class:
                     exit_remaining = signals["exit_remaining"]
                     sl_triggered = signals["sl_triggered"]
                     updated_qty = signals["updated_qty"]
-
-                    if new_sl != record.get("sl_price"):
-                        await self._update_stop_order(trade_id, contract, "sl", new_sl, qty, side)
+                    
+                    new_sl = round(new_sl)
+                    
+                    old_sl = record.get("sl_price")
+                    old_sl = round(old_sl)
+                    if new_sl != old_sl:
+                        self.logger.info(f"🔄 Changing Stoploss: 🛑 {old_sl} ➡️ {new_sl}")
+                        await self._update_order(trade_id, contract, sl=True, tp=False, auto_close = False, new_price = new_sl, qty = qty, side = side)
                         record["sl_price"] = new_sl
-
+                        
                     if take_70_profit and not record.get("profit_taken", False):
+                        self.logger.info(f"🎯💰 Taking partial profit at {take_70_profit}")
                         await self.take_partial_profit(trade_id, percent=70)
                         record["profit_taken"] = True
                         record["qty"] = updated_qty
 
+                    '''
                     if exit_remaining:
                         await self.execute_trade_exit(trade_id, reason="final_take_profit")
                         return
-
+                    
                     if sl_triggered:
                         await self.execute_trade_exit(trade_id, reason="stop_loss_triggered")
                         return
+                    '''
+
 
                 elif exit_method == 'E4':
                     signals = compute_hedge_exit_trade(entry_price, current_price, vwap, entry_time, datetime.datetime.utcnow())
                     new_sl = signals["stop_loss"]
                     sl_triggered = signals["sl_triggered"]
+                    tp_price = signals["tp_price"]
                     take_profit = signals["take_profit"]
                     auto_close = signals["auto_close"]
+                    
+                    new_sl = round(new_sl)
+                    tp_price = round(tp_price)
 
-                    if new_sl != record.get("sl_price"):
-                        await self._update_stop_order(trade_id, contract, "sl", new_sl, qty, side)
+                    old_sl = record.get("sl_price")
+                    old_sl = round(old_sl)
+                    if new_sl != old_sl:
+                        self.logger.info(f"🔄 Changing Stoploss: 🛑 {old_sl} ➡️ {new_sl}")
+                        await self._update_order(trade_id, contract, sl=True, tp=False, auto_close = False, new_price = new_sl, qty = qty, side = side)
                         record["sl_price"] = new_sl
 
+                    old_tp = record.get("tp_price")
+                    if tp_price != old_tp:
+                       
+                        self.logger.info(f"🔄 Changing Target: 🛑 {old_tp} ➡️ {tp_price}")
+                        await self._update_order(trade_id, contract, sl=False, tp=True, auto_close = False, new_price = tp_price, qty = qty, side = side)
+                        record["sl_price"] = new_sl
+                        
+                    '''
                     if take_profit:
-                        await self.execute_trade_exit(trade_id, reason="take_profit_hit")
+                        self.logger.info("🎯 Take-Profit price reached... 🚀 Initiating Take-Profit")
+                        await self.execute_trade_exit(trade_id, sl=False, tp=True, auto_close=False, reason="take_profit_hit")
                         return
-
+                    '''
+                    
                     if auto_close:
-                        await self.execute_trade_exit(trade_id, reason="auto_close_time_limit")
+                        self.logger.info("⏳ Auto-close days reached... 💼 Initiating Exit")
+                        await self._update_order(trade_id, contract, sl=False, tp=False, auto_close = True, new_price = None, qty = qty, side = side)
                         return
-
+                    '''
                     if sl_triggered:
-                        await self.execute_trade_exit(trade_id, reason="stop_loss_triggered")
+                        self.logger.info("🛑💥 Stoploss level reached... Triggering stop loss orders...")
+                        await self.execute_trade_exit(trade_id, sl=True, tp=False, auto_close=False, reason="stop_loss_triggered")
                         return
+                    '''
 
             asyncio.create_task(self._monitor_exit(trade_id))
             await self.save_state()
@@ -369,7 +368,7 @@ class order_manager_class:
             mode = self.watchlist_main_settings.get(symbol, {}).get("Mode").upper()
             if mode == "SCALPING":
                 current_time = datetime.datetime.now().time()
-                exit_time = datetime.time(15, 0)  # 15:00 or 3 PM local time
+                exit_time = datetime.time(15, 25)  # 15:00 or 3 PM local time
                 if current_time >= exit_time:
                     self.logger.info(f"🕒 Intraday time exit triggered for scalping trade {trade_id} at {current_time}")
                     await self.execute_trade_exit(trade_id, reason="intraday_time_exit")
@@ -474,34 +473,44 @@ class order_manager_class:
 
 
 
-    async def _update_stop_order(self, trade_id, contract, order_type, new_price, qty, side):
+    async def _update_order(self, trade_id, contract, sl, tp, auto_close, new_price, qty, side):
         record = self.active_trades.get(trade_id)
         if not record:
             return
         try:
-            order_id_key = f"{order_type}_order_id"
-            existing_order_id = record.get(order_id_key)
-            if existing_order_id is not None:
-                ib_order = None
-                await self.ib_connector.ensure_connected()
-                for o in self.ib.orders():
-                    if getattr(o, "permId", None) == existing_order_id:
-                        ib_order = o
-                        break
+            ib_order = None
+            new_price = round(new_price)
+            if sl == True:
+                existing_order_id = record.get("sl_order_id")
+                ib_order = record.get("sl_order")
+                ib_order.auxPrice = new_price
+                record["sl_price"] = new_price
+            
+            if tp == True: 
+                existing_order_id = record.get("tp_order_id")
+                ib_order = record.get("tp_order")        
+                ib_order.lmtPrice = new_price      
+                record["tp_price"] = new_price
+
+            if auto_close == True: 
+                existing_order_id = record.get("tp_order_id")
+                ib_order = record.get("tp_order")        
+                ib_order.orderType  = "MKT"                
+            
+            ib_order.totalQuantity = qty
+            ib_order.transmit =True
+            if existing_order_id is not None:                
                 if ib_order:
-                    # Modify in place
-                    ib_order.totalQuantity = qty
-                    # For StopOrder, price usually stored in 'auxPrice'
-                    ib_order.auxPrice = new_price
                     await self.ib_connector.ensure_connected()
                     self.ib.placeOrder(contract, ib_order)
                     self.logger.info(f"✅ Modified existing STOP order in place for {trade_id} at {new_price} qty {qty}")
                     return
 
             # Fallback: cancel & replace
-            await self._cancel_and_replace_stop_order(trade_id, contract, new_price, qty, side)
+            #await self._cancel_and_replace_stop_order(trade_id, contract, new_price, qty, side)
         except Exception as e:
             self.logger.exception(f"❌ Failed to update stop order for {trade_id}: {e}")
+            
 
     async def _cancel_and_replace_stop_order(self, trade_id, contract, new_price, qty, side):
         record = self.active_trades.get(trade_id)
@@ -632,7 +641,16 @@ class order_manager_class:
             self.logger.info(f"✅ Partial profit taken for {trade_id}, closed {partial_qty} shares out of {qty}")
     
             # Update record qty
-            record["qty"] = qty - partial_qty
+            new_qty = qty - partial_qty
+            record["qty"] = new_qty
+            
+            #update_profit_order_qty
+            tp_order = record.get("tp_order")
+            tp_order.totalQuantity = new_qty
+            tp_order.transmit = True
+            await self.ib_connector.ensure_connected()
+            self.ib.placeOrder(contract, tp_order)       
+            
             await self.save_state()
         except Exception as e:
             self.logger.exception(f"❌ Partial profit failed for {trade_id} exception: {e}")
@@ -655,7 +673,7 @@ class order_manager_class:
         # Return VWAP of the previous (complete) candle (second last index)
         return vwaps.iloc[-2]
 
-    async def execute_trade_exit(self, trade_id, reason=None):
+    async def execute_trade_exit(self, trade_id, sl=False, tp=False, auto_close = False, reason=None):
         """
         Fully exit trade: cancel orders, close position, clean active_trades etc.
         """
@@ -666,10 +684,17 @@ class order_manager_class:
         try:
             sl_order_id = record.get("sl_order_id")
             tp_order_id = record.get("tp_order_id")
+            sl_order = record.get("sl_order")
+            tp_order = record.get("tp_order")
+            
+            if sl == True: 
+                order = sl_order
+                sl.order
+            
             for oid in filter(None, [sl_order_id, tp_order_id]):
                 await self.ib_connector.ensure_connected()
                 for ib_order in self.ib.orders():
-                    if getattr(ib_order, "permId", None) == oid:
+                    if getattr(ib_order, "orderId", None) == oid:
                         await self.ib_connector.ensure_connected()
                         self.ib.cancelOrder(ib_order)
                         self.logger.info(f"✅ Cancelled order {oid} during exit for {trade_id}")

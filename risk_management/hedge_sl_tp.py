@@ -27,11 +27,13 @@ def compute_hedge_exit_trade(entry_price, current_price, vwap, entry_time, curre
 
     stop_loss = vwap * 0.99
     sl_triggered = current_price < stop_loss
-    take_profit = current_price > entry_price * 1.1515
+    tp_price = entry_price * 1.15
+    take_profit = current_price > tp_price
 
     return {
         "stop_loss": stop_loss,
         "sl_triggered": sl_triggered,
+        "tp_price": tp_price, 
         "take_profit": take_profit,
         "auto_close": auto_close
     }

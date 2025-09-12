@@ -34,7 +34,7 @@ print("""
 ====================================
 📈 Ready to trade and grow 📊
 💵 Good luck & happy trading! 💰
-""")
+""", flush=True)
 
 # Load all config inputs
 config_dict = get_config_inputs()
@@ -225,6 +225,8 @@ async def process_trading_signals_cached(symbol, timeframe, df_HTF, df_MTF, df_L
                                                                        sl_price, 
                                                                        tp_price, 
                                                                        meta, 
+                                                                       last_price, 
+                                                                       order_testing, 
                                                                        special_exit)
         if trade_id:
             logger.info(f"✅ Trade placed {trade_id} for {symbol} qty {qty}")
