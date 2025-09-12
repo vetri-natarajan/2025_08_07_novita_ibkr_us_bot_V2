@@ -54,4 +54,9 @@
 54. \GitProjects\client\2025_07_28_novita_ibkr_old_us_strategy_rules\code\actual\ibkr_us_bot\data\streaming_market_data.py:455: FutureWarning: The behavior of DataFrame concatenation with empty or all-NA entries is deprecated. In a future version, this will no longer exclude empty or all-NA columns when determining the result dtypes. To retain the old behavior, exclude the relevant entries before the concat operation.
   df = pd.concat([df, df_new])
 55. historical data fetching seems slow
+56. 
+  File "C:\GitProjects\client\2025_07_28_novita_ibkr_old_us_strategy_rules\code\actual\ibkr_us_bot\execution\order_manager.py", line 763, in save_state
+    "state": rec.get("state"),
+         ^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'logs/states/order_state.json'
 

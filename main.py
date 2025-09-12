@@ -164,7 +164,16 @@ async def process_trading_signals_cached(symbol, timeframe, df_HTF, df_MTF, df_L
         else: 
             last_price = df_LTF['close'].iloc[-1]
         
+        if order_testing:
+            if symbol == "INFY":
+                last_price = 1513
+            elif symbol == "SBIN":
+                last_price = 1382
+            elif symbol == "RELIANCE":
+                last_price = 822
         qty = compute_qty(account_value, trading_units, last_price, vix, vix_threshold, vix_reduction_factor, skip_on_high_vix)
+
+            
         if qty <= 0:
             logger.info(f"⚠️ Qty zero for {symbol}")
             return False
@@ -188,7 +197,9 @@ async def process_trading_signals_cached(symbol, timeframe, df_HTF, df_MTF, df_L
         
                 sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_input, tp_input)
         elif exit_method in ['E3', 'E4']:
-            sl_price, tp_price = None
+            sl_input = 2 # 2 percetn
+            tp_input = 4 # 4 percent
+            sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_input, tp_input) #initially place large sl and tp so they don't fill  then modify it
             special_exit = True
         else:
             logger.info("⚠️ Exit method not defined, taking default fixed_sl_exits.")
@@ -306,7 +317,7 @@ async def run_live_mode(ib_connector):
         ta_settings, max_look_back = read_ta_settings(symbol, config_directory, logger)
     
         for tf in parsed_tf:
-            subscribed = await streaming_data.subscribe(contract, tf, max_tf, max_look_back)
+            subscribed = await streaming_data.subscribe(contract, tf, max_tf, max_look_back, order_testing)
             if not subscribed:
                 logger.warning(f"⚠️ Subscription failed for {symbol} {tf}")
                 continue
@@ -326,7 +337,7 @@ async def run_live_mode(ib_connector):
 
             # Immediately fire the callback with seeded historical bars to check initial conditions
             seeded_df = streaming_data.get_latest(symbol, tf)
-            if seeded_df is not None and not seeded_df.empty:
+            if (seeded_df is not None and not seeded_df.empty) or order_testing:
                 # Run callback synchronously here (no live bar yet, so dummy event loop sync)
                 asyncio.create_task(on_bar_handler_wrapper(symbol, tf, seeded_df))
             else:

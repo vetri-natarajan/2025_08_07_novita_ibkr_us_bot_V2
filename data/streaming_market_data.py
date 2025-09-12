@@ -294,7 +294,7 @@ class StreamingData:
         # self.logger.debug(f"Market data update for {symbol}: Last Price = {last_price}")
         pass
 
-    async def subscribe(self, contract: Contract, timeframe: str, max_tf: str, max_look_back: int) -> bool:
+    async def subscribe(self, contract: Contract, timeframe: str, max_tf: str, max_look_back: int, order_testing) -> bool:
         await self.ib_connector.ensure_connected()
         symbol = contract.symbol
 
@@ -303,9 +303,13 @@ class StreamingData:
                 self.logger.info(f"♻️ Already subscribed: {symbol} [{timeframe}]")
                 return True
 
+            if not order_testing:
             # Seed historical
-            self.logger.info(f"🌱 Seeding historical data for {symbol} [{timeframe}]")
-            df = await self.seed_historical(contract, timeframe, max_tf, max_look_back)
+                self.logger.info(f"🌱 Seeding historical data for {symbol} [{timeframe}]")
+                df = await self.seed_historical(contract, timeframe, max_tf, max_look_back)
+            else: 
+                df = None
+                
             if df is None:
                 df = pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
                 self.logger.warning(f"⚠️ Starting with empty data for {symbol} [{timeframe}] after failed seed")

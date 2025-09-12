@@ -40,40 +40,42 @@ def check_MTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_M
 
 
 def check_LTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_LTF, df_HTF, logger, order_testing = False, is_live = False, live_price = None):
-    if df_LTF is None:
-        logger.info("❌ LTF : Dataframe is None or too short")
-        return False
-
-    entry_decision = main_settings[symbol]['Entry Decision'].upper()
-    if entry_decision not in ["BREAKOUT", "PULLBACK", "BOTH"]:
-        logger.info("⚠️ Entry decision input not correct")
-        raise ValueError("Entry decision must be 'BREAKOUT', 'PULLBACK', or 'BOTH'")
-
-    HH_LL_bars = int(main_settings[symbol]['HHLL'])
-    lastNHTF = df_HTF.iloc[-HH_LL_bars-1:-1].copy()
-    logger.info(f'LTF tail====>\n {df_LTF.tail()}')
-    breakout_level = lastNHTF['high'].max()
-    last = df_LTF.iloc[-1]
-    last_close = last['close']
-    last_vol = last['volume']
-
-    if entry_decision in ["BREAKOUT", "BOTH"]:
-        if not order_testing:
+   
+    if not order_testing:
+        if df_LTF is None:
+            logger.info("❌ LTF : Dataframe is None or too short")
+            return False
+    
+        entry_decision = main_settings[symbol]['Entry Decision'].upper()
+        if entry_decision not in ["BREAKOUT", "PULLBACK", "BOTH"]:
+            logger.info("⚠️ Entry decision input not correct")
+            raise ValueError("Entry decision must be 'BREAKOUT', 'PULLBACK', or 'BOTH'")
+    
+        HH_LL_bars = int(main_settings[symbol]['HHLL'])
+        lastNHTF = df_HTF.iloc[-HH_LL_bars-1:-1].copy()
+        logger.info(f'LTF tail====>\n {df_LTF.tail()}')
+        breakout_level = lastNHTF['high'].max()
+        last = df_LTF.iloc[-1]
+        last_close = last['close']
+        last_vol = last['volume']
+    
+        if entry_decision in ["BREAKOUT", "BOTH"]:
+            
             if not price_breakout_confirm(df_LTF, breakout_level, logger, is_live, live_price):
                 return False
     
             vol_confirm_input = main_settings[symbol]['Volume Confirm']
             if not volume_confirmation(df_LTF, df_HTF, vol_confirm_input, logger):
                 return False
-    
-        if entry_decision in ["PULLBACK", "BOTH"]:
-            if not pullback_retest(df_LTF, breakout_level, logger):
+        
+            if entry_decision in ["PULLBACK", "BOTH"]:
+                if not pullback_retest(df_LTF, breakout_level, logger):
+                    return False
+        
+            # Technical confluence for LTF
+            ltf_timeframe = main_settings[symbol]["Parsed Raw TF"][2]
+            if not check_technical_confluence(ltf_timeframe, df_LTF, ta_settings, main_settings, logger):
+                logger.info("⚠️❌ LTF technical confluence not met")
                 return False
-    
-        # Technical confluence for LTF
-        ltf_timeframe = main_settings[symbol]["Parsed Raw TF"][2]
-        if not check_technical_confluence(ltf_timeframe, df_LTF, ta_settings, main_settings, logger):
-            logger.info("⚠️❌ LTF technical confluence not met")
-            return False
     logger.info(f"✅📈 LTF [{symbol}] all conditions are met...")
     return True
