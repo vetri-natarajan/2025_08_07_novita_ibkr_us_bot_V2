@@ -54,7 +54,7 @@ class order_manager_class:
         
         self.logger.info("✅ Order manager initialized successfully")
 
-    async def place_market_entry_with_bracket(self, 
+    async def place_market_entry_with_bracket_old(self, 
                                               symbol,
                                               contract, 
                                               qty: int, 
@@ -96,6 +96,107 @@ class order_manager_class:
         asyncio.create_task(self._monitor_fill_and_attach_children(trade_id))
         await self.save_state()
         return trade_id
+
+
+
+    async def place_market_entry_with_bracket(self, 
+                                              symbol,
+                                              contract, 
+                                              qty: int, 
+                                              side: str, 
+                                              sl_price: float = None,
+                                              tp_price: float = None, 
+                                              meta : Dict = None, 
+                                              special_exit : bool = False):
+        if qty <= 0: 
+            self.logger.warning("⚠️ Quantity <= 0, skipping order placement")
+            return None            
+        '''
+        order = MarketOrder(side.upper(), qty)
+        await self.ib_connector.ensure_connected()
+        parent_order =  self.ib.placeOrder(contract, order)
+        await parent_order.filledEvent
+        '''
+
+        '''
+        # Parent order
+        parent = LimitOrder('BUY', 100, 250.00)
+        parent.orderId = self.ib.client.getReqId()
+        parent.transmit = False
+        '''
+
+        qty = 1
+        parent = MarketOrder('BUY', qty)
+        parent.orderId = self.ib.client.getReqId()
+        parent.transmit = False
+        
+        # Stop loss
+        stopLoss = StopOrder('SELL', qty, sl_price)
+        stopLoss.orderId = self.ib.client.getReqId()
+        stopLoss.parentId = parent.orderId
+        stopLoss.transmit = False
+        
+        # Take profit
+        takeProfit = LimitOrder('SELL', qty, tp_price)
+        takeProfit.orderId = self.ib.client.getReqId()
+        takeProfit.parentId = parent.orderId
+        takeProfit.transmit = True
+        
+        
+        parent_trade = self.ib.placeOrder(contract, parent)
+        sl_trade = self.ib.placeOrder(contract, stopLoss)
+        tp_trade = self.ib.placeOrder(contract, takeProfit)
+        
+        # Place bracket order
+        trades = []
+        trades.append(parent_trade)
+        trades.append(sl_trade)
+        trades.append(tp_trade)
+        
+        self.logger.info(f"Bracket order placed: {len(trades)} orders")
+        
+        self.logger.info(f"Parent market order: {parent_trade} orders")
+        self.logger.info(f"Stop order: {sl_trade} orders")
+        self.logger.info(f"Parent market order: {tp_trade} orders")
+ 
+        
+        
+        
+        order_id = getattr(parent_trade.orderStatus, "permId", None)
+        sl_order_id = getattr(sl_trade.orderStatus, "permId", None)
+        tp_order_id = getattr(tp_trade.orderStatus, "permId", None)
+        
+        
+        
+        self.logger.info(f'parent_order_id: {order_id} sl_order_id: {sl_order_id} tp_order_id: {tp_order_id}')
+        
+        self.ib.disconnect()
+        
+        trade_id = f"{symbol}-{order_id}"
+        record = {
+                "symbol": symbol,
+                "contract": contract,
+                "order": parent,
+                "order_id": order_id,
+                "qty": qty,
+                "side": side.upper(),
+                "sl_price": sl_price,
+                "tp_price": tp_price,
+                "meta": meta or {},
+                "state": "PENDING",
+                "fill_price": None,
+                "special_exit" : special_exit,
+                "entry_time": datetime.datetime.utcnow()  # Store entry time here
+                }
+        
+        self.active_trades[trade_id] = record
+        self.logger.info("✅ Placed b market order %s for %s qty %s", trade_id, symbol, qty)
+        
+        asyncio.create_task(self._monitor_fill_and_attach_children(trade_id))
+        await self.save_state()
+        return trade_id
+        
+        
 
 
     async def _monitor_fill_and_attach_children(self, trade_id: str):
