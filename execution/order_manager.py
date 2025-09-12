@@ -162,15 +162,14 @@ class order_manager_class:
         
         
         
-        order_id = getattr(parent_trade.orderStatus, "permId", None)
-        sl_order_id = getattr(sl_trade.orderStatus, "permId", None)
-        tp_order_id = getattr(tp_trade.orderStatus, "permId", None)
+        order_id = getattr(parent_trade.orderStatus, "orderId", None)
+        sl_order_id = getattr(sl_trade.orderStatus, "orderId", None)
+        tp_order_id = getattr(tp_trade.orderStatus, "orderId", None)
         
         
         
         self.logger.info(f'parent_order_id: {order_id} sl_order_id: {sl_order_id} tp_order_id: {tp_order_id}')
         
-        self.ib.disconnect()
         
         trade_id = f"{symbol}-{order_id}"
         record = {
@@ -178,6 +177,8 @@ class order_manager_class:
                 "contract": contract,
                 "order": parent,
                 "order_id": order_id,
+                "sl_order_id": sl_order_id,
+                "tp_order_id": tp_order_id,
                 "qty": qty,
                 "side": side.upper(),
                 "sl_price": sl_price,
@@ -217,7 +218,7 @@ class order_manager_class:
             trades = self.ib.trades()
             parent_trade = None
             for t in trades:
-                if getattr(t.order, "permId", None) == order_id:
+                if getattr(t.order, "orderId", None) == order_id:
                     parent_trade = t
                     break
             if parent_trade and parent_trade.isDone():
@@ -246,7 +247,7 @@ class order_manager_class:
 
 
             
-            
+        '''
 
             # Place SL/TP once and start exit monitor
         if record.get("sl_price") is not None:
@@ -272,6 +273,7 @@ class order_manager_class:
                 self.logger.info("✅ Placed Limit order for %s at %s tp_order_id: %s ", trade_id, record["tp_price"], record["tp_order_id"])
             except Exception as e:
                 self.logger.exception("❌ Failed to place Limit order for %s", trade_id)
+        '''  
 
         try:
             self.trade_reporter.report_trade_open(trade_id, record)
@@ -399,12 +401,19 @@ class order_manager_class:
                 fill_price = record.get("fill_price")
                 exit_fill_prices = []
                 exit_fill_quantities = []
-    
+                
+                self.logger.info(f"exit_order_ids====================> {exit_order_ids}")
                 try:
                     await self.ib_connector.ensure_connected()
                     trades = self.ib.trades()
                     for trade in trades:
-                        if getattr(trade, "OrderId", None) in exit_order_ids:
+                        self.logger.info(f"\n\n\ntrade===> {trade}")
+                        #temp_id = getattr(trade.fills.OrderId, "OrderId", None)
+                        temp_id = trade.order.orderId
+                        #self.logger.info(f"\nexit_order_ids====================> {exit_order_ids}")
+                        #self.logger.info(f"\ntempid outsdie====================> {temp_id}")
+                        if temp_id in exit_order_ids:
+                            #self.logger.info(f"\ntempid inside====================> {temp_id}")
                             for fill in trade.fills:
                                 exit_fill_prices.append(fill.execution.price)
                                 exit_fill_quantities.append(fill.execution.shares)
@@ -434,7 +443,8 @@ class order_manager_class:
 
                 except Exception as e:
                     self.logger.exception("❌ Error computing PnL for %s Exception: %s", trade_id, e)
-    
+                
+                '''
                 self.logger.info(f"🚫 Before Cancelling remaining trades [{symbol}] Parent order_id: {trade_id}")
                 # Cancel any remaining child exit orders
                 try:
@@ -443,9 +453,9 @@ class order_manager_class:
                     self.logger.info(f"[{symbol}] Parent order_id: {trade_id} sl_order_id: {tp_order_id} tp_order_id: {tp_order_id}")
                     for order_id in filter(None, [sl_order_id, tp_order_id]):
                         for ib_order in self.ib.orders():
-                            self.logger.info(f"ib_order===> {ib_order}")
+                            #self.logger.info(f"ib_order===> {ib_order}")
                             comparison_id = getattr(ib_order, "OrderId", None)
-                            self.logger.info(f"comparison_id {comparison_id}")
+                            #self.logger.info(f"comparison_id {comparison_id}")
                             if comparison_id == order_id:
                                 self.logger.info(f"🚫 Cancelling remaining trades for [{symbol}] Child order_id: {order_id}")
                                 self.ib.cancelOrder(ib_order)
@@ -453,7 +463,7 @@ class order_manager_class:
                                 break
                 except Exception as e:
                     self.logger.exception("❌ Failed to cancel child exit orders for %s: %s", trade_id, e)
-    
+                '''
                 try:
                     del self.active_trades[trade_id]
                 except KeyError:

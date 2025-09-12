@@ -187,7 +187,7 @@ async def process_trading_signals_cached(symbol, timeframe, df_HTF, df_MTF, df_L
             sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_input, tp_input)
         elif exit_method == "E2":
             try:
-                atr_val_df = calculate_atr(df_LTF, max_look_back * 2)
+                atr_val_df = calculate_atr(df_LTF, 5)
                 atr_val = float(atr_val_df.iloc[-1])
             except Exception:
                 atr_val = None
