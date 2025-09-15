@@ -68,6 +68,8 @@ def get_config_inputs():
         trade_time_out_secs = int(conf["TRADING"]["trade_time_out_secs"])
         auto_trade_save_secs = int(conf["TRADING"]["auto_trade_save_secs"])
         skip_backtest_vix = parse_bool(conf["TRADING"]["skip_backtest_vix"])
+        portfolio_snapshot_mins = int(conf["TRADING"]["portfolio_snapshot_mins"])
+        intraday_scalping_exit_time = conf["TRADING"]["intraday_scalping_exit_time"]
         
         # --- TESTING ---
         order_testing = parse_bool(conf["TESTING"]["order_testing"])
@@ -115,11 +117,13 @@ def get_config_inputs():
             "order_testing": order_testing,
             "trade_time_out_secs" : trade_time_out_secs,
             "auto_trade_save_secs" : auto_trade_save_secs,
+            "portfolio_snapshot_mins" : portfolio_snapshot_mins,
             "skip_backtest_vix" : skip_backtest_vix,
             "config_directory": config_directory,
             "trade_reporter_file": trade_reporter_file,
             "trade_state_file": trade_state_file,
             "order_manager_state_file": order_manager_state_file, 
+            "intraday_scalping_exit_time": intraday_scalping_exit_time,
             "data_directory" : data_directory,
             "backtest_directory": backtest_directory,
             "require_config_valid": require_config_valid,

@@ -221,13 +221,15 @@ async def process_trading_signals_cached(symbol, timeframe, df_HTF, df_MTF, df_L
         trade_id = await order_manager.place_market_entry_with_bracket( symbol,                                                     
                                                                        contract, 
                                                                        qty, 
-                                                                       'BUY', 
+                                                                       'BUY',
+                                                                       dt_LTF, 
                                                                        sl_price, 
                                                                        tp_price, 
                                                                        meta, 
                                                                        last_price, 
                                                                        order_testing, 
-                                                                       special_exit)
+                                                                       special_exit, 
+                                                                       df_LTF)
         if trade_id:
             logger.info(f"✅ Trade placed {trade_id} for {symbol} qty {qty}")
         return trade_id is not None

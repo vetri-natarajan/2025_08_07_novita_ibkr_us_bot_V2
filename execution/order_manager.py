@@ -8,8 +8,12 @@ from data.market_data import MarketData
 from indicators.vwap import calculate_vwap
 from pathlib import Path
 
+from risk_management.fixed_sl_tp import compute_fixed_sl_tp
+from risk_management.atr_based_sl_tp import compute_atr_sl_tp
 from risk_management.dynamic_sl_tp import compute_dynamic_sl_swing
 from risk_management.hedge_sl_tp import compute_hedge_exit_trade
+
+from indicators.atr import calculate_atr
 
 
 from utils.ensure_directory import ensure_directory
@@ -45,10 +49,12 @@ class order_manager_class:
         
         self.exchange = config_dict['exchange']
         self.currency = config_dict['currency']
+        self.config_dict = config_dict
         self.watchlist_main_settings = watchlist_main_settings
         self.market_data = market_data  # Store streaming market data object
         self.ib_connector  = ib_connector
         
+        self.intraday_scalping_exit_time = config_dict["intraday_scalping_exit_time"]
         self.order_state_folder = Path(order_manager_state_file).parent
         dirctory = ensure_directory(self.order_state_folder, self.logger)
         
@@ -104,12 +110,14 @@ class order_manager_class:
                                               contract, 
                                               qty: int, 
                                               side: str, 
+                                              df_LTF,
                                               sl_price: float = None,
                                               tp_price: float = None, 
                                               meta : Dict = None, 
                                               last_price: float = None, 
                                               order_testing: bool = False,
-                                              special_exit : bool = False):
+                                              special_exit: bool = False, 
+                                              ):
         if qty <= 0: 
             self.logger.warning("⚠️ Quantity <= 0, skipping order placement")
             return None            
@@ -189,14 +197,14 @@ class order_manager_class:
         self.active_trades[trade_id] = record
         
         
-        asyncio.create_task(self._monitor_fill_and_attach_children(trade_id, last_price, order_testing))
+        asyncio.create_task(self._monitor_fill_and_attach_children(trade_id, last_price, order_testing, df_LTF))
         await self.save_state()
         return trade_id
         
         
 
 
-    async def _monitor_fill_and_attach_children(self, trade_id: str, last_price: float, order_testing: bool):
+    async def _monitor_fill_and_attach_children(self, trade_id: str, last_price: float, order_testing: bool, df_LTF):
         record = self.active_trades.get(trade_id)
         if not record:
             self.logger.warning("⚠️ No active trade record found for %s; nothing to monitor.", trade_id)
@@ -249,7 +257,41 @@ class order_manager_class:
         asyncio.create_task(self._monitor_exit(trade_id))
         await self.save_state()
         
+        sl_input = self.watchlist_main_settings[symbol]['SL']
+        tp_input = self.watchlist_main_settings[symbol]['TP']
+        old_sl = record.get("sl_price")
+        old_tp = record.get("tp_price")
+        old_sl = round(old_sl)
+        old_tp = round(old_tp)
+        
 
+        if exit_method == "E1":
+            sl_price_new, tp_price_new = compute_fixed_sl_tp(entry_price, sl_input, tp_input)
+            sl_price_new = round(sl_price_new)
+            tp_price_new = round(tp_price_new)       
+            
+        elif exit_method == "E2":
+            try:
+                atr_val_df = calculate_atr(df_LTF, 5)
+                atr_val = float(atr_val_df.iloc[-1])
+            except Exception:
+                atr_val = None
+            if atr_val is not None:
+                sl_price_new, tp_price_new = compute_atr_sl_tp(entry_price, atr_val, sl_input, tp_input)
+                sl_price_new = round(sl_price_new)
+                tp_price_new = round(tp_price_new)         
+                
+        if sl_price_new != old_sl:
+            self.logger.info(f"🔄 Changing Stoploss: 🛑 {old_sl} ➡️ {sl_price_new}")
+            await self._update_order(trade_id, contract, sl=True, tp=False, auto_close = False, new_price = sl_price_new, qty = qty, side = side)
+            record["sl_price"] = sl_price_new        
+  
+        if tp_price_new != old_tp:                       
+            self.logger.info(f"🔄 Changing Target: 🛑 {old_tp} ➡️ {tp_price_new}")
+            await self._update_order(trade_id, contract, sl=False, tp=True, auto_close = False, new_price = tp_price_new, qty = qty, side = side)
+            record["tp_price"] = tp_price_new     
+                
+                
         if exit_method in ['E3', 'E4']:
             # Continuous monitoring loop without timeout for dynamic SL/TP and qty
             while True:
@@ -263,7 +305,7 @@ class order_manager_class:
                         self.logger.warning(f"Skipping VWAP update for {symbol} due to insufficient data")
                         continue
                 else: 
-                    vwap = last_price*0.995
+                    vwap = last_price*0.995 #testing mode assuming the vwap
 
                 qty = record.get("qty")  # dynamic qty
 
@@ -320,11 +362,11 @@ class order_manager_class:
                         record["sl_price"] = new_sl
 
                     old_tp = record.get("tp_price")
-                    if tp_price != old_tp:
-                       
+                    old_tp = round(old_tp)
+                    if tp_price != old_tp:                       
                         self.logger.info(f"🔄 Changing Target: 🛑 {old_tp} ➡️ {tp_price}")
                         await self._update_order(trade_id, contract, sl=False, tp=True, auto_close = False, new_price = tp_price, qty = qty, side = side)
-                        record["sl_price"] = new_sl
+                        record["tp_price"] = tp_price
                         
                     '''
                     if take_profit:
@@ -368,7 +410,8 @@ class order_manager_class:
             mode = self.watchlist_main_settings.get(symbol, {}).get("Mode").upper()
             if mode == "SCALPING":
                 current_time = datetime.datetime.now().time()
-                exit_time = datetime.time(15, 25)  # 15:00 or 3 PM local time
+                exit_hour, exit_min = self.intraday_scalping_exit_time.split(':')
+                exit_time = datetime.time(exit_hour, exit_min)  # 15:00 or 3 PM local time
                 if current_time >= exit_time:
                     self.logger.info(f"🕒 Intraday time exit triggered for scalping trade {trade_id} at {current_time}")
                     await self.execute_trade_exit(trade_id, reason="intraday_time_exit")
@@ -734,30 +777,67 @@ class order_manager_class:
        except Exception as e:
            self.logger.info(f"🛑 OrderManager._periodic_portfolio_snapshot exception: {e}")
     
+
+
     async def save_portfolio_snapshot(self):
-       snapshot_data = {
-           "timestamp": datetime.datetime.now().isoformat(),
-           "active_trades": {}
-       }
-       for trade_id, rec in self.active_trades.items():
-           snapshot_data["active_trades"][trade_id] = {
-               "symbol": getattr(rec.get('contract'), 'symbol', None),
-               "qty": rec.get("qty"),
-               "side": rec.get("side"),
-               "state": rec.get("state"),
-               "fill_price": rec.get("fill_price"),
-               "sl_price": rec.get("sl_price"),
-               "tp_price": rec.get("tp_price"),
-               "meta": rec.get("meta")
-           }
-       try:
-           # Append snapshot as new line in JSON Lines format
-           with open('reports/portfolio_snapshots.json', 'a') as f:
-               f.write(json.dumps(snapshot_data) + '\\n')
-           self.logger.info("✅ Portfolio snapshot saved at %s", snapshot_data["timestamp"])
-       except Exception as e:
-           self.logger.exception("🚨 Failed to save portfolio snapshot: %s", e)
-               
+        timestamp = datetime.datetime.now().isoformat()
+        snapshot_data = {
+            "timestamp": timestamp,
+            "active_trades": {}
+        }
+    
+        # Build JSON snapshot
+        lines_to_write = []  # plain-text lines, one per trade
+        for trade_id, rec in self.active_trades.items():
+            contract = rec.get("contract")
+            symbol = getattr(contract, "symbol", None)
+            entry = {
+                "symbol": symbol,
+                "qty": rec.get("qty"),
+                "side": rec.get("side"),
+                "state": rec.get("state"),
+                "fill_price": rec.get("fill_price"),
+                "sl_price": rec.get("sl_price"),
+                "tp_price": rec.get("tp_price"),
+                "meta": rec.get("meta"),
+            }
+            snapshot_data["active_trades"][trade_id] = entry
+    
+            # Construct a concise, single-line text record per trade
+            # Ensure it's one line by replacing newlines in meta if needed
+            meta_text = str(entry["meta"]).replace("\n", " ") if entry["meta"] is not None else ""
+            line = (
+                f"{timestamp} | id={trade_id} | sym={symbol} | side={entry['side']} "
+                f"| qty={entry['qty']} | state={entry['state']} | fill={entry['fill_price']} "
+                f"| sl={entry['sl_price']} | tp={entry['tp_price']} | meta={meta_text}"
+            )
+            lines_to_write.append(line)
+    
+        try:
+            Path("reports").mkdir(parents=True, exist_ok=True)
+    
+            # JSON Lines append (unchanged)
+            with open("reports/portfolio_snapshots.json", "a", encoding="utf-8") as f_jsonl:
+                f_jsonl.write(json.dumps(snapshot_data, default=str) + "\n")
+    
+            # Plain text append: write line-by-line
+            # Option A: one line per trade (lines_to_write)
+            with open("reports/portfolio_snapshots_readable.txt", "a", encoding="utf-8") as f_txt:
+                for line in lines_to_write:
+                    f_txt.write(line + "\n")
+    
+            # Option B (alternative): one summarized line per snapshot
+            # Uncomment to use instead of per-trade lines
+            # summary = (
+            #     f"{timestamp} | trades={len(self.active_trades)} | ids={[tid for tid in self.active_trades.keys()]}"
+            # )
+            # with open("reports/portfolio_snapshots.txt", "a", encoding="utf-8") as f_txt:
+            #     f_txt.write(summary + "\n")
+    
+            self.logger.info("✅ Portfolio snapshot saved at %s", timestamp)
+        except Exception as e:
+            self.logger.exception("🚨 Failed to save portfolio snapshot: %s", e)
+                  
     async def save_state(self):
         data = {}
         for trade_id, rec in self.active_trades.items():
