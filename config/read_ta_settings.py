@@ -1,7 +1,7 @@
 import os
 import csv
 
-def read_ta_settings(symbol, config_dir, logger):
+def read_ta_settings(symbol, config_dir, watchlist_main_settings, logger):
     """
     Reads the TA settings csv and returns a dictionary keyed by indicators,
     along with the max value and max lookback found in data.
@@ -16,8 +16,14 @@ def read_ta_settings(symbol, config_dir, logger):
         max_lookback: int or None - max lookback value in 'Lookback' keys
     """
     logger.info("📄🔍 Reading TA settings...")
+    trading_mode = watchlist_main_settings[symbol]['Mode']
+    if trading_mode.upper() == 'SCALPING':
+        filename = f"{symbol}_Scalping_TA_Settings.csv"
+    elif trading_mode.upper() == 'SWING':
+        filename = f"{symbol}_Swing_TA_Settings.csv"
+    else: 
+        raise ValueError(f"⚠️ Invalid trading mode: {trading_mode}. Please choose a valid option.")
 
-    filename = f"{symbol}_Scalping_TA_Settings.csv"
     file_path = os.path.join(config_dir, filename)
     
     if not os.path.exists(file_path):

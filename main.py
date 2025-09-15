@@ -118,6 +118,7 @@ async def run_backtest_entrypoint(ib, account_value, ib_connector):
         fetcher,
         config_dict,
         premarket_bt_checker,
+        watchlist_main_settings, 
         logger
     )
     await backtester.run_backtest(
@@ -222,14 +223,14 @@ async def process_trading_signals_cached(symbol, timeframe, df_HTF, df_MTF, df_L
                                                                        contract, 
                                                                        qty, 
                                                                        'BUY',
-                                                                       dt_LTF, 
+                                                                       df_LTF, 
                                                                        sl_price, 
                                                                        tp_price, 
                                                                        meta, 
                                                                        last_price, 
                                                                        order_testing, 
-                                                                       special_exit, 
-                                                                       df_LTF)
+                                                                       special_exit
+                                                                       )
         if trade_id:
             logger.info(f"✅ Trade placed {trade_id} for {symbol} qty {qty}")
         return trade_id is not None
@@ -316,9 +317,9 @@ async def run_live_mode(ib_connector):
     for symbol in symbol_list:
         contract = ib_connector.create_stock_contract(symbol, exchange, currency)
         parsed_tf = watchlist_main_settings[symbol]['Parsed TF']
-        ta_settings, max_look_back = read_ta_settings(symbol, config_directory, logger)
+        ta_settings, max_look_back = read_ta_settings(symbol, config_directory, watchlist_main_settings, logger)
         max_tf = parsed_tf[0]
-        ta_settings, max_look_back = read_ta_settings(symbol, config_directory, logger)
+        #ta_settings, max_look_back = read_ta_settings(symbol, config_directory, logger)
     
         for tf in parsed_tf:
             subscribed = await streaming_data.subscribe(contract, tf, max_tf, max_look_back, order_testing)

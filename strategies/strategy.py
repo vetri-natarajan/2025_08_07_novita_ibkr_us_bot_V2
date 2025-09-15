@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 
 from logic.trend_check import check_HTF_conditions as htf_check
-from logic.volatility_check import check_MTF_conditions as mtf_check
+from logic.volatility_filter import check_MTF_conditions as mtf_check
 from logic.breakout_price import price_breakout_confirm
 from logic.breakout_volume import volume_confirmation
 from logic.pullback import pullback_retest

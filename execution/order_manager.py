@@ -281,15 +281,15 @@ class order_manager_class:
                 sl_price_new = round(sl_price_new)
                 tp_price_new = round(tp_price_new)         
                 
-        if sl_price_new != old_sl:
-            self.logger.info(f"🔄 Changing Stoploss: 🛑 {old_sl} ➡️ {sl_price_new}")
-            await self._update_order(trade_id, contract, sl=True, tp=False, auto_close = False, new_price = sl_price_new, qty = qty, side = side)
-            record["sl_price"] = sl_price_new        
-  
-        if tp_price_new != old_tp:                       
-            self.logger.info(f"🔄 Changing Target: 🛑 {old_tp} ➡️ {tp_price_new}")
-            await self._update_order(trade_id, contract, sl=False, tp=True, auto_close = False, new_price = tp_price_new, qty = qty, side = side)
-            record["tp_price"] = tp_price_new     
+            if sl_price_new != old_sl:
+                self.logger.info(f"🔄 Changing Stoploss: 🛑 {old_sl} ➡️ {sl_price_new}")
+                await self._update_order(trade_id, contract, sl=True, tp=False, auto_close = False, new_price = sl_price_new, qty = qty, side = side)
+                record["sl_price"] = sl_price_new        
+      
+            if tp_price_new != old_tp:                       
+                self.logger.info(f"🔄 Changing Target: 🛑 {old_tp} ➡️ {tp_price_new}")
+                await self._update_order(trade_id, contract, sl=False, tp=True, auto_close = False, new_price = tp_price_new, qty = qty, side = side)
+                record["tp_price"] = tp_price_new     
                 
                 
         if exit_method in ['E3', 'E4']:
@@ -411,7 +411,7 @@ class order_manager_class:
             if mode == "SCALPING":
                 current_time = datetime.datetime.now().time()
                 exit_hour, exit_min = self.intraday_scalping_exit_time.split(':')
-                exit_time = datetime.time(exit_hour, exit_min)  # 15:00 or 3 PM local time
+                exit_time = datetime.time(int(exit_hour), int(exit_min))  # 15:00 or 3 PM local time
                 if current_time >= exit_time:
                     self.logger.info(f"🕒 Intraday time exit triggered for scalping trade {trade_id} at {current_time}")
                     await self.execute_trade_exit(trade_id, reason="intraday_time_exit")

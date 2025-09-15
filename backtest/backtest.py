@@ -84,7 +84,7 @@ class PreMarketChecksBacktest:
         return self.get_close_price(self.vix_df, date)
 
 class BacktestEngine:
-    def __init__(self, watchlist, account_value, data_fetcher, config_dict, premarket, logger, commission=0.0005):
+    def __init__(self, watchlist, account_value, data_fetcher, config_dict, premarket, watchlist_main_settings, logger, commission=0.0005):
         self.watchlist = watchlist
         self.account_value = account_value
         self.commission = commission
@@ -94,6 +94,7 @@ class BacktestEngine:
         self.config_dict = config_dict
         self.order_testing = self.config_dict['order_testing']
         self.premarket = premarket
+        self.watchlist_main_settings = watchlist_main_settings
         self.logger = logger
         self.backtest_file_handler = None
         self.logger.info("🛠️ Initialized BacktestEngine")
@@ -243,7 +244,7 @@ class BacktestEngine:
         daily_checks = []
         for i, symbol in enumerate(symbol_list):
             self.logger.info(f"🔄 Processing symbol {i}/{len(symbol_list)}: {symbol}")
-            ta_settings, max_look_back = read_ta_settings(symbol, config_directory, self.logger)
+            ta_settings, max_look_back = read_ta_settings(symbol, config_directory, self.watchlist_main_settings ,self.logger)
             self.account_value = config_dict['trading_capital']
 
             exit_method = watchlist_main_settings[symbol]['Exit']
@@ -349,12 +350,22 @@ class BacktestEngine:
                                     k_sl=exit_sl_input,
                                     k_tp=exit_tp_input
                                 )
-                            else:
-                                sl_price, tp_price = compute_fixed_sl_tp(
-                                    last_price,
-                                    sl_pct=exit_sl_input,
-                                    tp_pct=exit_tp_input
-                                )
+                        elif exit_method in ['E3', 'E4']:
+                            exit_sl_input = 2
+                            exit_tp_input = 4
+                            
+                            sl_price, tp_price = compute_fixed_sl_tp(
+                                last_price,
+                                sl_pct=exit_sl_input,
+                                tp_pct=exit_tp_input
+                            )
+                        else: 
+                            sl_price, tp_price = compute_fixed_sl_tp(
+                                last_price,
+                                sl_pct=exit_sl_input,
+                                tp_pct=exit_tp_input
+                            )
+                            
                         entry_time = current_time
                         self.enter_trade(symbol, last_price, qty, sl_price, tp_price, sig, entry_time, side="BUY")
 
