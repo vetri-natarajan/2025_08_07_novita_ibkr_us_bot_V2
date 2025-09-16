@@ -60,6 +60,7 @@ def get_config_inputs():
         trading_time_zone = conf["TRADING"]["time_zone"]
         trading_windows = parse_list(conf["TRADING"]["trading_windows"])
         trading_capital = float(conf["TRADING"]["capital"])
+        percent_of_account_value = float(conf["TRADING"]["percent_of_account_value"])
         trading_units = int(conf["TRADING"]["units"])
         vix_threshold = float(conf["TRADING"]["vix_threshold"])
         vix_reduction_factor = float(conf["TRADING"]["vix_reduction_factor"])
@@ -109,6 +110,7 @@ def get_config_inputs():
             "trading_time_zone": trading_time_zone,
             "trading_windows": trading_windows,
             "trading_capital": trading_capital,
+            "percent_of_account_value": percent_of_account_value,
             "trading_units": trading_units,
             "vix_threshold": vix_threshold,
             "vix_reduction_factor": vix_reduction_factor,

@@ -10,6 +10,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 def compute_qty(account_value: float,
+                percent_of_account_value: float, 
                 units: int,
                 price: float,
                 vix: float,
@@ -18,7 +19,7 @@ def compute_qty(account_value: float,
                 skip_on_high_vix: bool = False) -> int:
     if price <= 0:
         return 0
-    unit_value = account_value / max(1, units)
+    unit_value = account_value*percent_of_account_value*0.01/ max(1, units)
     print("====================================")
     print(vix, vix_reduction_factor)
     if vix >= vix_threshold:

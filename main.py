@@ -56,6 +56,7 @@ backtest_duration_units = config_dict["backtest_duration_units"]
 trading_time_zone = config_dict["trading_time_zone"]
 trading_windows = config_dict["trading_windows"]
 trading_capital = config_dict["trading_capital"]
+percent_of_account_value = config_dict["percent_of_account_value"] 
 trading_units = config_dict["trading_units"]
 vix_threshold = config_dict["vix_threshold"]
 vix_reduction_factor = config_dict["vix_reduction_factor"]
@@ -132,7 +133,7 @@ async def run_backtest_entrypoint(ib, account_value, ib_connector):
 
 async def process_trading_signals_cached(symbol, timeframe, df_HTF, df_MTF, df_LTF,
                                          streaming_data, order_manager, cfg,
-                                         account_value, vix, logger,
+                                         account_value, percent_of_account_value, vix, logger,
                                          watchlist_main_settings, ta_settings,
                                          max_look_back, trading_units,
                                          vix_threshold, vix_reduction_factor,
@@ -172,7 +173,7 @@ async def process_trading_signals_cached(symbol, timeframe, df_HTF, df_MTF, df_L
                 last_price = 1382
             elif symbol == "RELIANCE":
                 last_price = 822
-        qty = compute_qty(account_value, trading_units, last_price, vix, vix_threshold, vix_reduction_factor, skip_on_high_vix)
+        qty = compute_qty(account_value, percent_of_account_value, trading_units, last_price, vix, vix_threshold, vix_reduction_factor, skip_on_high_vix)
 
             
         if qty <= 0:
@@ -276,7 +277,7 @@ async def on_bar_handler(symbol, timeframe, df, market_data,ta_settings, max_loo
             logger.info(f"⏳ Data not ready for {symbol}")
             return
         await process_trading_signals_cached(symbol, timeframe, df_HTF, df_MTF, df_LTF, market_data,
-                                            order_manager, cfg, account_value, vix,
+                                            order_manager, cfg, account_value, percent_of_account_value, vix,
                                             logger, watchlist_main_settings, ta_settings,
                                             max_look_back, trading_units=cfg["trading_units"],
                                             vix_threshold=cfg["vix_threshold"],

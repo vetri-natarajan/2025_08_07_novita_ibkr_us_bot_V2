@@ -93,6 +93,7 @@ class BacktestEngine:
         self.data_fetcher = data_fetcher
         self.config_dict = config_dict
         self.order_testing = self.config_dict['order_testing']
+        self.percent_of_account_value = self.config_dict['percent_of_account_value']
         self.premarket = premarket
         self.watchlist_main_settings = watchlist_main_settings
         self.logger = logger
@@ -322,7 +323,9 @@ class BacktestEngine:
                         last_price = float(df_LTF_slice['close'].iloc[-1])
                         vix = self.premarket.get_close_price(self.premarket.vix_df, current_day.date())
                         qty = compute_qty(
+                            
                             self.account_value,
+                            self.percent_of_account_value,
                             units=int(self.config_dict.get("trading_units", 5)),
                             price=last_price,
                             vix=vix,
@@ -330,6 +333,9 @@ class BacktestEngine:
                             vix_reduction_factor=float(self.config_dict.get("vix_reduction_factor", 1)),
                             skip_on_high_vix=bool(self.config_dict.get("skip_on_high_vix", False)),
                         )
+                        
+                        self.account_value = self.account_value - (qty*last_price)
+                        
                         if qty <= 0:
                             continue
                         if exit_method == "E1":

@@ -1,3 +1,4 @@
 Symbol,Hi to Lo TF,HHLL,Entry Decision,Mode,Total Gain,Each Gain,Volatility,Volume Confirm,Max Draw down,Exit,SL,TP
-INFY,"30m,5m,1m",1,breakout,Scalping,~0.01% ? 0.99%,~0.01%/ 0.99%,~0.01%/ 0.99%,H,10%,E4,1,2
-INFY,"30m,5m,1m",1,breakout,Swing,~0.01% ? 0.99%,~0.01%/ 0.99%,~0.01%/ 0.99%,H,10%,E4,1,2
+INFY,"30m,5m,1m",1,breakout,Scalping,~0.01% ? 0.99%,~0.01%/ 0.99%,~0.01%/ 0.99%,H,10%,E1,1,2
+RELIANCE,"30m,5m,1m",1,breakout,Scalping,~0.01% ? 0.99%,~0.01%/ 0.99%,~0.01%/ 0.99%,H,10%,E1,1,2
+SBIN,"30m,5m,1m",1,breakout,Scalping,~0.01% ? 0.99%,~0.01%/ 0.99%,~0.01%/ 0.99%,H,10%,E1,1,2
