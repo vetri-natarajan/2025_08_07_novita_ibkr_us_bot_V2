@@ -62,8 +62,17 @@ class HistoricalDataFetcher:
     async def fetch_paginated_data(self, symbol: str, timeframe: str, start_time: datetime, end_time: datetime, fetch_index = False) -> pd.DataFrame:
         if fetch_index:
             contract = Index(symbol, self.exchange_index, self.currency)
+            await self.ib_connector.ensure_connected()
+            qualified = self.ib.qualifyContracts(contract)
+
         else:
             contract = Stock(symbol, self.exchange, self.currency)
+            await self.ib_connector.ensure_connected()
+            qualified = self.ib.qualifyContracts(contract)
+            
+        self.logger.info(f"✅ Qualified Contract: {qualified[0]}")
+        self.logger.info(f"📌 conId: {qualified[0].conId}")
+        
         bars = []
         current_end = end_time
         max_delta = timedelta(days=self.max_days_per_request)

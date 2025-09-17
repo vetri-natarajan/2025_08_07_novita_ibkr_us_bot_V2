@@ -1,13 +1,6 @@
-# -*- coding: utf-8 -*-
-"""
-Flat config parser with separate variables for clarity
-Created on Fri Aug  8 10:51:08 2025
-@author: Vetriselvan
-"""
-
 import configparser
 import sys
-from pathlib import Path
+from utils.make_path import make_path
 
 def parse_bool(value: str) -> bool:
     value = str(value).strip().lower()
@@ -22,7 +15,8 @@ def parse_list(input_list : list, separator=",") -> list:
 
 def get_config_inputs():
     conf = configparser.ConfigParser()
-    config_path = Path("config/inputs.cfg")
+    
+    config_path = make_path("_inputs", "inputs.cfg")
 
     try:
         print("📂 Reading config file... 🛠️")
@@ -77,8 +71,9 @@ def get_config_inputs():
         
 
         # --- LOGGING ---
+        main_configuration_file = conf["LOGGING"]["main_configuration_file"]
         log_directory = conf["LOGGING"]["log_directory"]
-        config_directory = conf["LOGGING"]["config_directory"]
+        inputs_directory = conf["LOGGING"]["inputs_directory"]
         trade_state_file = conf["LOGGING"]["trade_state_file"]
         trade_reporter_file = conf["LOGGING"]["trade_reporter_file"]
         order_manager_state_file = conf["LOGGING"]["order_manager_state_file"]
@@ -121,7 +116,8 @@ def get_config_inputs():
             "auto_trade_save_secs" : auto_trade_save_secs,
             "portfolio_snapshot_mins" : portfolio_snapshot_mins,
             "skip_backtest_vix" : skip_backtest_vix,
-            "config_directory": config_directory,
+            "inputs_directory": inputs_directory,
+            "main_configuration_file": main_configuration_file,
             "trade_reporter_file": trade_reporter_file,
             "trade_state_file": trade_state_file,
             "order_manager_state_file": order_manager_state_file, 

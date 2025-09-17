@@ -1,8 +1,16 @@
 import numpy as np
-from logic.each_candle_gain import check_each_candle_gains
-from logic.total_candle_gain import check_total_gain_limits
-from logic.max_drawdown import check_max_drawdown
-from logic.check_TA_confluence import check_technical_confluence
+
+
+from logic.helper_modules import(
+    extract_ohlc_as_float,
+    check_htf_structure,
+    calculate_gains,
+    check_each_candle_gains,
+    check_total_gain_limits,
+    check_max_drawdown,
+    check_technical_confluence
+    )
+
 
 def check_HTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_HTF, logger):
     HH_LL_bars = int(main_settings[symbol]['HHLL'])
@@ -10,39 +18,34 @@ def check_HTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_H
     total_gain_limits = main_settings[symbol]['Parsed Total Gain']
     dd_limits = float(main_settings[symbol]['Max Draw down'].replace("%", "").strip())
 
-    if df_HTF is None or len(df_HTF) < HH_LL_bars:
+    if df_HTF is None or len(df_HTF) < (HH_LL_bars + 1):
         logger.info("❌ HTF: Dataframe is None or too short")
         return False
     logger.info(f"➡️ dt HTF  ====>\n {df_HTF}")
     lastN = df_HTF.iloc[-HH_LL_bars-1:-1].copy()
     logger.info(f"➡️ HTF lastN ====>\n {lastN}")
 
-
-    opens = lastN['open'].astype(float)
-    closes = lastN['close'].astype(float)
-    highs = lastN['high'].astype(float)
-    lows = lastN['low'].astype(float)
+    
+    # Extract typed OHLC series for vectorized computations.
+    opens, highs, lows, closes = extract_ohlc_as_float(lastN)
 
     # 1. All closes > opens (green candles)
-    if not all(closes > opens):
-        logger.info("❌ HTF: Not all closes > opens")
+    if not check_htf_structure(opens, closes, logger):        
         return False
-
-    gains = (closes - opens)*100/(opens + 1e-8)
+    
+    #calculate gains 
+    gains = calculate_gains(opens, closes)
 
     # 2. Each candle gain check
-    if not check_each_candle_gains(gains, each_gain_limits):
-        logger.info(f"❌ HTF: Gains not in range {each_gain_limits}")
+    if not check_each_candle_gains(gains, each_gain_limits, logger):        
         return False
 
     # 3. Total gain check
-    if not check_total_gain_limits(gains, total_gain_limits):
-        logger.info(f"❌ HTF: Total Gains condition not satisfied")
+    if not check_total_gain_limits(gains, total_gain_limits, logger):
         return False
 
     # 4. Max drawdown
-    if not check_max_drawdown(highs, lows, dd_limits):
-        logger.info(f"❌ HTF: Drawdown condition failed")
+    if not check_max_drawdown(highs, lows, dd_limits, logger):        
         return False
 
     # Technical confluence check

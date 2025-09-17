@@ -1,7 +1,7 @@
 import os
 import csv
 
-def read_ta_settings(symbol, config_dir, watchlist_main_settings, logger):
+def read_ta_settings(symbol, inputs_directory, watchlist_main_settings, logger):
     """
     Reads the TA settings csv and returns a dictionary keyed by indicators,
     along with the max value and max lookback found in data.
@@ -24,7 +24,7 @@ def read_ta_settings(symbol, config_dir, watchlist_main_settings, logger):
     else: 
         raise ValueError(f"⚠️ Invalid trading mode: {trading_mode}. Please choose a valid option.")
 
-    file_path = os.path.join(config_dir, filename)
+    file_path = os.path.join(inputs_directory, filename)
     
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"TA settings file not found: {file_path}")

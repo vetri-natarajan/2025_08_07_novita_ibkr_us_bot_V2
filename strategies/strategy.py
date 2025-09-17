@@ -1,11 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Sep  1 21:22:28 2025
-
-@author: Vetriselvan
-"""
-
-# -*- coding: utf-8 -*-
 """
 strategies/scalping_strategy.py
 Orchestrator module that imports logic modules and exposes the main entry points:
@@ -14,21 +6,20 @@ Orchestrator module that imports logic modules and exposes the main entry points
 - check_LTF_conditions
 - check_technical_confluence
 """
-
-import logging
-import numpy as np
-import pandas as pd
-
-from logic.trend_check import check_HTF_conditions as htf_check
+# HTF and MTF checks
+from logic.trend_filter import check_HTF_conditions as htf_check
 from logic.volatility_filter import check_MTF_conditions as mtf_check
-from logic.breakout_price import price_breakout_confirm
-from logic.breakout_volume import volume_confirmation
-from logic.pullback import pullback_retest
-from logic.check_TA_confluence import check_technical_confluence
+
+# Helper function imports
+
+from logic.helper_modules import(
+    price_breakout_confirm, 
+    volume_confirmation,
+    pullback_retest,
+    check_technical_confluence    
+    )
 
 EPS = 1e-8
-
-
 
 
 def check_HTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_HTF, logger):

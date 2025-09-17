@@ -87,7 +87,8 @@ class PreMarketChecksBacktest:
 
 
 class BacktestEngine:
-    def __init__(self, watchlist, account_value, data_fetcher, config_dict, premarket, watchlist_main_settings, logger, commission=0.0005):
+    def __init__(self, ib, watchlist, account_value, data_fetcher, config_dict, premarket, watchlist_main_settings, logger, commission=0.0005):
+        self.ib = ib
         self.watchlist = watchlist
         self.account_value = float(account_value)
         self.commission = float(commission)
@@ -278,7 +279,7 @@ class BacktestEngine:
         save_data=True,
         load_data=True
     ):
-        config_directory = config_dict.get("config_directory", "")
+        input_directory = config_dict.get("inputs_directory", "")
         backtest_dir = config_dict['backtest_directory']
         check_directory = ensure_directory(backtest_dir, self.logger)
         now = dt.datetime.now()
@@ -303,7 +304,7 @@ class BacktestEngine:
         for i, symbol in enumerate(symbol_list):
             self.logger.info(f"🔄 Processing symbol {i}/{len(symbol_list)}: {symbol}")
 
-            ta_settings, max_look_back = read_ta_settings(symbol, config_directory, self.watchlist_main_settings, self.logger)
+            ta_settings, max_look_back = read_ta_settings(symbol, input_directory, self.watchlist_main_settings, self.logger)
 
             # Do NOT reset equity per symbol
             exit_method = watchlist_main_settings[symbol]['Exit']
@@ -548,6 +549,7 @@ class BacktestEngine:
         self.write_trades_to_file(backtest_dir, f"{backtest_file}_backtest_reports")
 
         self.stop_backtest_logging()
+        self.ib.disconnect()
 
     def report_results(self):
         total_trades = len([t for t in self.trades if t.get('pnl') is not None])

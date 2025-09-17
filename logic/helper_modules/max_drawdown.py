@@ -1,4 +1,4 @@
-def check_max_drawdown(highs, lows, max_allowed):
+def check_max_drawdown(highs, lows, max_allowed, logger):
     """
     Calculate drawdown and check if it exceeds max allowed percent.
     
@@ -10,4 +10,8 @@ def check_max_drawdown(highs, lows, max_allowed):
     peak = highs.max()
     trough = lows.min()
     drawdown = (peak - trough)*100/(peak + 1e-8)
-    return drawdown <= max_allowed
+    drawdown_within_limits = drawdown <= max_allowed
+    if not drawdown_within_limits:
+        logger.info("❌ HTF: Drawdown condition failed")
+        return False
+    return True

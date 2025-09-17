@@ -15,6 +15,7 @@ from ib_async import Index, Stock
 async def get_vix(ib, exchange, currency, vix_symbol, ib_connector, logger):
     logger.info("🔍 Initiating VIX data fetch: exchange=%s, currency=%s", exchange, currency)
     vix_contract = Index(symbol=vix_symbol, exchange=exchange, currency=currency)
+    qualified = ib.qualifyContracts(vix_contract)
     logger.info(f"⏲️ vix contract ==> {vix_contract}.")
     try:
         await ib_connector.ensure_connected()
@@ -49,6 +50,7 @@ async def get_vix(ib, exchange, currency, vix_symbol, ib_connector, logger):
 async def get_spx(ib, exchange, currency, spx_symbol, ib_connector, logger):
     logger.info("🔍 Initiating SPX data fetch: exchange=%s, currency=%s", exchange, currency)
     spx_contract = Index(symbol=spx_symbol, exchange=exchange, currency=currency)
+    qualified = ib.qualifyContracts(spx_contract)
     
     try:
         await ib_connector.ensure_connected()
@@ -83,6 +85,7 @@ async def get_spx(ib, exchange, currency, spx_symbol, ib_connector, logger):
 async def get_spx_close(ib, exchange, currency, vix_symbol, ib_connector, logger):
     logger.info("🔍 Fetching SPX previous close: exchange=%s, currency=%s", exchange, currency)
     spx_contract = Index(symbol=vix_symbol, exchange=exchange, currency=currency)
+    qualified = ib.qualifyContracts(spx_contract)
     logger.info(f'spx_contract===> {spx_contract}')
     try:
         await ib_connector.ensure_connected()

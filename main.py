@@ -2,10 +2,8 @@ import asyncio
 import nest_asyncio
 nest_asyncio.apply()
 
-import functools
 import logging
-import time
-from datetime import datetime, timezone
+from datetime import datetime
 from ib_async import IB
 from config.config_parser import get_config_inputs
 from execution.ibkr_connector import ibkr_connector
@@ -27,7 +25,7 @@ from risk_management.fixed_sl_tp import compute_fixed_sl_tp
 from data.market_data import MarketData
 from backtest.backtest import BacktestEngine, PreMarketChecksBacktest
 from utils.is_in_trading_window import is_time_in_trading_windows
-
+from utils.make_path import make_path
 print("""
 ====================================
 🚀 Welcome to US-stock Bot 💹
@@ -65,7 +63,8 @@ test_run = config_dict["test_run"]
 order_testing = config_dict["order_testing"]
 trade_time_out_secs = config_dict["trade_time_out_secs"]
 auto_trade_save_secs = config_dict["auto_trade_save_secs"]
-config_directory = config_dict["config_directory"]
+inputs_directory = config_dict["inputs_directory"]
+main_configuration_file = config_dict["main_configuration_file"]
 trade_state_file = config_dict["trade_state_file"]
 trade_reporter_file = config_dict["trade_reporter_file"]
 order_manager_state_file = config_dict["order_manager_state_file"]
@@ -76,7 +75,8 @@ loss_halt_count = config_dict["loss_halt_count"]
 loss_halt_duration_hours = config_dict["loss_halt_duration_hours"]
 
 logger = initialize_logger(config_dict["log_directory"], "US_stocks", logging.INFO, config_dict["run_mode"])
-symbol_list, watchlist_main_settings = read_watchlist_main_config("config/Symbol_WatchList_Main_Configuration.csv", logger)
+main_configuration_file_path = make_path(inputs_directory, main_configuration_file)
+symbol_list, watchlist_main_settings = read_watchlist_main_config(main_configuration_file_path, logger)
 print(watchlist_main_settings)
 
 ib = IB()
@@ -114,6 +114,7 @@ async def run_backtest_entrypoint(ib, account_value, ib_connector):
         logger=logger
     )
     backtester = BacktestEngine(
+        ib,
         symbol_list,
         account_value,
         fetcher,
@@ -317,8 +318,12 @@ async def run_live_mode(ib_connector):
         
     for symbol in symbol_list:
         contract = ib_connector.create_stock_contract(symbol, exchange, currency)
+        qualified = ib.qualifyContracts(contract)
+        logger.info(f"✅ Qualified Contract: {qualified[0]}")
+        logger.info(f"📌 conId: {qualified[0].conId}")
+        
         parsed_tf = watchlist_main_settings[symbol]['Parsed TF']
-        ta_settings, max_look_back = read_ta_settings(symbol, config_directory, watchlist_main_settings, logger)
+        ta_settings, max_look_back = read_ta_settings(symbol, inputs_directory, watchlist_main_settings, logger)
         max_tf = parsed_tf[0]
         #ta_settings, max_look_back = read_ta_settings(symbol, config_directory, logger)
     
