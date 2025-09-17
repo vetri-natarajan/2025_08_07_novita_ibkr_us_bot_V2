@@ -318,9 +318,9 @@ class BacktestEngine:
                 end_time = tz.localize(end_time)
 
             dfs, timeframes = await self.data_fetcher.fetch_multiple_timeframes(symbol, start_time, end_time, save=save_data, load=load_data)
-            df_HTF = dfs.get(timeframes[0])
-            df_MTF = dfs.get(timeframes[1])
-            df_LTF = dfs.get(timeframes[2])
+            df_HTF = dfs.get(timeframes)
+            df_MTF = dfs.get(timeframes[12])
+            df_LTF = dfs.get(timeframes[13])
 
             if df_LTF is None or df_LTF.empty or df_HTF is None or df_MTF is None:
                 self.logger.warning(f"⚠️ Skipping {symbol} due to missing data.")
@@ -352,7 +352,7 @@ class BacktestEngine:
 
                     df_HTF.index = ensure_utc(pd.to_datetime(df_HTF.index))
                     df_MTF.index = ensure_utc(pd.to_datetime(df_MTF.index))
-                    current_time_utc = ensure_utc(pd.DatetimeIndex([current_time]))[0]
+                    current_time_utc = ensure_utc(pd.DatetimeIndex([current_time]))
                     df_HTF_slice = df_HTF.loc[:current_time_utc]
                     df_MTF_slice = df_MTF.loc[:current_time_utc]
 
