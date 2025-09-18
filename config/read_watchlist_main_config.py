@@ -52,7 +52,7 @@ def parse_time_frames(hi_to_lo_tf_combined):
             'm': 'min',
             'h': 'hour',
             'd': 'day',
-            'w': 'week'
+            'w': 'week',
         }
     
         # Normalize unit to lowercase

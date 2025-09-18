@@ -8,6 +8,8 @@ Created on Tue Sep  2 08:23:18 2025
 # The technical confluence function can remain here or similarly refactored later
 def check_technical_confluence(timeframe, df_TF, ta_settings, main_settings, logger) -> bool:
     yes_list = ["Y", "YES", "TRUE", "1"]
+    #timeframe = timeframe.upper()
+    logger.info(ta_settings["RSI"]["other_columns"][timeframe])
     logger.info(ta_settings["RSI"]["other_columns"][timeframe].upper())
     check_rsi = ta_settings["RSI"]["other_columns"][timeframe].upper() in yes_list
     check_macd = ta_settings["MACD"]["other_columns"][timeframe].upper() in yes_list
