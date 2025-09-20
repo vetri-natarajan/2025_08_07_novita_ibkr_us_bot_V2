@@ -12,11 +12,11 @@ from logic.helper_modules import(
     )
 
 
-def check_HTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_HTF, logger):
-    HH_LL_bars = int(main_settings[symbol]['HHLL'])
-    each_gain_limits = main_settings[symbol]['Parsed Each Gain']
-    total_gain_limits = main_settings[symbol]['Parsed Total Gain']
-    dd_limits = float(main_settings[symbol]['Max Draw down'].replace("%", "").strip())
+def check_HTF_conditions(symbol_combined, symbol, main_settings, ta_settings, max_look_back, df_HTF, logger):
+    HH_LL_bars = int(main_settings[symbol_combined]['HHLL'])
+    each_gain_limits = main_settings[symbol_combined]['Parsed Each Gain']
+    total_gain_limits = main_settings[symbol_combined]['Parsed Total Gain']
+    dd_limits = float(main_settings[symbol_combined]['Max Draw down'].replace("%", "").strip())
 
     if df_HTF is None or len(df_HTF) < (HH_LL_bars + 1):
         logger.info("❌ HTF: Dataframe is None or too short")
@@ -49,9 +49,9 @@ def check_HTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_H
         return False
 
     # Technical confluence check
-    htf_timeframe = main_settings[symbol]["Parsed Raw TF"][0]
+    htf_timeframe = main_settings[symbol_combined]["Parsed Raw TF"][0]
     if not check_technical_confluence(htf_timeframe, df_HTF, ta_settings, main_settings, logger):
-        logger.info("⚠️❌ HTF technical confluence not met...")
+        logger.info("⚠️❌ HTF technical confluence for symbol {symbol_combined} not met...")
         return False
-    logger.info("✅📈 HTF all conditions are met...")
+    logger.info(f"✅📈 HTF all conditions for symbol {symbol_combined} are met...")
     return True

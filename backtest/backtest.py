@@ -199,11 +199,11 @@ class BacktestEngine:
         exit_commission = price * qty * self.commission
         # Entry commission already debited at entry; subtract only exit leg here
         net_pnl = gross_pnl - exit_commission
-
+        self.logger.info(f'🚪 In exit – self.account_value: {self.account_value} ')
         # Cash proceeds from exit leg credited back
         proceeds = price * qty - exit_commission
         self.account_value += proceeds
-
+        self.logger.info(f'🚪 Exit Trade – Partial Proceeds: {proceeds}, Price: {price}, Qty: {qty}, Commission: {exit_commission}')
         pos['exit_price'] = price
         pos['exit_time'] = time
         pos['pnl'] = net_pnl
@@ -235,10 +235,14 @@ class BacktestEngine:
         gross_pnl = (price - entry_price) * qty_to_exit if side == "BUY" else (entry_price - price) * qty_to_exit
         exit_commission = price * qty_to_exit * self.commission
         net_pnl = gross_pnl - exit_commission
-
+        
+        self.logger.info(f'🚪 In exit partial – self.account_value: {self.account_value} ')
         # Credit proceeds of the partial exit
         proceeds = price * qty_to_exit - exit_commission
         self.account_value += proceeds
+        
+        self.logger.info(f'🚪 Exit Trade partial – Partial Proceeds: {proceeds}, Price: {price}, Qty: {qty_to_exit}, Commission: {exit_commission}')
+
 
         pos['qty'] = qty_remaining
         if qty_remaining == 0:
@@ -551,6 +555,23 @@ class BacktestEngine:
         self.stop_backtest_logging()
         self.ib.disconnect()
 
+
+
+
+    async def run_backtest_new(
+        self,
+        config_dict,
+        symbol_list,
+        watchlist_main_settings,
+        duration_value=2,
+        duration_unit='weeks',
+        end_time=None,
+        save_data=True,
+        load_data=True
+    ):
+        
+        pass
+
     def report_results(self):
         total_trades = len([t for t in self.trades if t.get('pnl') is not None])
         winning_trades = [t for t in self.trades if t.get('pnl') is not None and t['pnl'] > 0]
@@ -558,6 +579,15 @@ class BacktestEngine:
         total_pnl = sum(t['pnl'] for t in self.trades if t['pnl'] is not None)
         win_rate = len(winning_trades) / total_trades if total_trades > 0 else 0.0
 
+        '''
+        total_trades = len([t for t in self.trades])
+        winning_trades = [t for t in self.trades if t.get('pnl') and t['pnl'] > 0]
+        losing_trades = [t for t in self.trades if t.get('pnl') and t['pnl'] <= 0 ]
+        total_pnl = sum(t['pnl'] for t in self.trades if t['pnl'] is not None)
+        win_rate = len(winning_trades) / total_trades if total_trades > 0 else 0.0
+        '''
+
+        
         self.logger.info("Backtest summary:")
         self.logger.info(f"Starting equity: {self.starting_equity:.2f}")
         self.logger.info(f"Ending equity: {self.ending_equity:.2f}")

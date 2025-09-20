@@ -60,52 +60,9 @@ class order_manager_class:
         
         self.logger.info("✅ Order manager initialized successfully")
 
-    async def place_market_entry_with_bracket_old(self, 
-                                              symbol,
-                                              contract, 
-                                              qty: int, 
-                                              side: str, 
-                                              sl_price: float = None,
-                                              tp_price: float = None, 
-                                              meta : Dict = None, 
-                                              special_exit : bool = False):
-        if qty <= 0: 
-            self.logger.warning("⚠️ Quantity <= 0, skipping order placement")
-            return None            
-
-        order = MarketOrder(side.upper(), qty)
-        await self.ib_connector.ensure_connected()
-        parent_order =  self.ib.placeOrder(contract, order)
-        await parent_order.filledEvent
-        
-        order_id = getattr(parent_order.orderStatus, "permId", None)
-        trade_id = f"{symbol}-{order_id}"
-        record = {
-                "symbol": symbol,
-                "contract": contract,
-                "order": order,
-                "order_id": order_id,
-                "qty": qty,
-                "side": side.upper(),
-                "sl_price": sl_price,
-                "tp_price": tp_price,
-                "meta": meta or {},
-                "state": "PENDING",
-                "fill_price": None,
-                "special_exit" : special_exit,
-                "entry_time": datetime.datetime.utcnow()  # Store entry time here
-                }
-        
-        self.active_trades[trade_id] = record
-        self.logger.info("✅ Placed parent market order %s for %s qty %s", trade_id, symbol, qty)
-        
-        asyncio.create_task(self._monitor_fill_and_attach_children(trade_id))
-        await self.save_state()
-        return trade_id
-
-
 
     async def place_market_entry_with_bracket(self, 
+                                              symbol_combined,
                                               symbol,
                                               contract, 
                                               qty: int, 
@@ -163,7 +120,7 @@ class order_manager_class:
             "✅ Bracket Order Placed\n"
             "====================================\n"
             f"📝 Order ID: {order_id}\n"
-            f"📈 Symbol: [{symbol}]\n"
+            f"📈 Symbol: [{symbol_combined}]\n"
             f"🔢 Quantity: {qty}\n"
             f"🛑 Stoploss: {sl_price} (ID: {sl_order_id})\n"
             f"🎯 Target: {tp_price} (ID: {tp_order_id})\n"
@@ -175,6 +132,7 @@ class order_manager_class:
         self.logger.info(f'📝 parent_order_id: {order_id} | 🛑 sl_order_id: {sl_order_id} | 🎯 tp_order_id: {tp_order_id}')        
         trade_id = f"{symbol}-{order_id}"
         record = {
+                "symbol_combined": symbol_combined,
                 "symbol": symbol,
                 "contract": contract,
                 "order": parent,
@@ -209,6 +167,8 @@ class order_manager_class:
         if not record:
             self.logger.warning("⚠️ No active trade record found for %s; nothing to monitor.", trade_id)
             return
+        
+        symbol_combined = record["symbol_combined"]
         symbol = record["symbol"]
         contract = record["contract"]
         order_id = record.get("order_id")
@@ -257,8 +217,8 @@ class order_manager_class:
         asyncio.create_task(self._monitor_exit(trade_id))
         await self.save_state()
         
-        sl_input = self.watchlist_main_settings[symbol]['SL']
-        tp_input = self.watchlist_main_settings[symbol]['TP']
+        sl_input = self.watchlist_main_settings[symbol_combined]['SL']
+        tp_input = self.watchlist_main_settings[symbol_combined]['TP']
         old_sl = record.get("sl_price")
         old_tp = record.get("tp_price")
         old_sl = round(old_sl)
@@ -397,7 +357,9 @@ class order_manager_class:
             return
     
         contract = record["contract"]
+        symbol_combined = record["symbol_combined"]
         symbol = getattr(contract, 'symbol')
+        
         exit_order_ids = [record.get('sl_order_id'), record.get('tp_order_id')]
         side = record.get('side')
     
@@ -407,7 +369,7 @@ class order_manager_class:
 
     
             # Check for intraday timed exit for scalping mode
-            mode = self.watchlist_main_settings.get(symbol, {}).get("Mode").upper()
+            mode = self.watchlist_main_settings.get(symbol_combined, {}).get("Mode").upper()
             if mode == "SCALPING":
                 current_time = datetime.datetime.now().time()
                 exit_hour, exit_min = self.intraday_scalping_exit_time.split(':')
@@ -486,26 +448,6 @@ class order_manager_class:
                 except Exception as e:
                     self.logger.exception("❌ Error computing PnL for %s Exception: %s", trade_id, e)
                 
-                '''
-                self.logger.info(f"🚫 Before Cancelling remaining trades [{symbol}] Parent order_id: {trade_id}")
-                # Cancel any remaining child exit orders
-                try:
-                    sl_order_id = record.get("sl_order_id")
-                    tp_order_id = record.get("tp_order_id")
-                    self.logger.info(f"[{symbol}] Parent order_id: {trade_id} sl_order_id: {tp_order_id} tp_order_id: {tp_order_id}")
-                    for order_id in filter(None, [sl_order_id, tp_order_id]):
-                        for ib_order in self.ib.orders():
-                            #self.logger.info(f"ib_order===> {ib_order}")
-                            comparison_id = getattr(ib_order, "OrderId", None)
-                            #self.logger.info(f"comparison_id {comparison_id}")
-                            if comparison_id == order_id:
-                                self.logger.info(f"🚫 Cancelling remaining trades for [{symbol}] Child order_id: {order_id}")
-                                self.ib.cancelOrder(ib_order)
-                                self.logger.info("✅ Cancelled order %s on trade exit %s", order_id, trade_id)
-                                break
-                except Exception as e:
-                    self.logger.exception("❌ Failed to cancel child exit orders for %s: %s", trade_id, e)
-                '''
                 try:
                     del self.active_trades[trade_id]
                 except KeyError:
@@ -698,14 +640,14 @@ class order_manager_class:
         except Exception as e:
             self.logger.exception(f"❌ Partial profit failed for {trade_id} exception: {e}")
 
-    def get_vwap(self, symbol, ltf='1min') -> float:
+    def get_vwap(self, symbol_combined, symbol, ltf='1min') -> float:
         """
         Gets VWAP of previous completed candle in given timeframe using streaming data.
 
         Returns None if data insufficient.
         """
         
-        parsed_tf = self.watchlist_main_settings[symbol]['Parsed TF']
+        parsed_tf = self.watchlist_main_settings[symbol_combined]['Parsed TF']
         ltf = parsed_tf[2]
         df = self.market_data.get_latest(symbol, ltf)
         if df is None or df.empty or len(df) < 2:
@@ -790,8 +732,10 @@ class order_manager_class:
         lines_to_write = []  # plain-text lines, one per trade
         for trade_id, rec in self.active_trades.items():
             contract = rec.get("contract")
+            symbol_combined = rec["symbol_combined"]
             symbol = getattr(contract, "symbol", None)
             entry = {
+                "symbol_combined": symbol_combined,
                 "symbol": symbol,
                 "qty": rec.get("qty"),
                 "side": rec.get("side"),
@@ -842,7 +786,9 @@ class order_manager_class:
         data = {}
         for trade_id, rec in self.active_trades.items():
             contract = rec.get('contract')
+            symbol_combined =  getattr(rec, "symbol_combined", None)
             contract_dict = {
+                "symbol_combined": symbol_combined,
                 "symbol": getattr(contract, "symbol", None),
                 "secType": getattr(contract, "secType", None),
                 "exchange": getattr(contract, "exchange", None),
@@ -850,6 +796,7 @@ class order_manager_class:
                 }
             
             data[trade_id] = {
+                
                 "contract": contract_dict, 
                 "order_id": rec.get("order_id"),
                 "qty": rec.get("qty"),
@@ -911,7 +858,8 @@ class order_manager_class:
         for trade_id, rec in data.items():
             cdict = rec.get('contract', {})
             symbol = cdict.get('symbol')
-            print("symbbl inside===> ", symbol)
+            symbol_combined = cdict.get('symbol_combined')
+            print("symbbl inside===> ", symbol_combined)
             
             
             if not symbol: 
@@ -938,11 +886,12 @@ class order_manager_class:
         await self.save_state()
            
    
-    def has_active_trades_for_symbol(self, symbol: str) -> bool:
+    def has_active_trades_for_symbol(self, symbol_combined: str, symbol: str) -> bool:
         for rec in self.active_trades.values():
             try: 
                 c = rec.get('contract')
-                if getattr(c, 'symbol', None) == symbol and rec.get('state') in ('PENDING', 'FILLED'):
+                symbol_combined_rec = rec.get('symbol_combined')
+                if getattr(c, 'symbol', None) == symbol and rec.get('state') in ('PENDING', 'FILLED') and symbol_combined == symbol_combined_rec:
                     return True
             except Exception as e: 
                 self.logger.info(f"⚠️ Exception in has_active_trades module: {e}")

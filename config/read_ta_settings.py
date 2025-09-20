@@ -1,7 +1,7 @@
 import os
 import csv
 
-def read_ta_settings(symbol, inputs_directory, watchlist_main_settings, logger):
+def read_ta_settings(symbol_combined, symbol, mode, inputs_directory, watchlist_main_settings, logger):
     """
     Reads the TA settings csv and returns a dictionary keyed by indicators,
     along with the max value and max lookback found in data.
@@ -16,7 +16,7 @@ def read_ta_settings(symbol, inputs_directory, watchlist_main_settings, logger):
         max_lookback: int or None - max lookback value in 'Lookback' keys
     """
     logger.info("📄🔍 Reading TA settings...")
-    trading_mode = watchlist_main_settings[symbol]['Mode']
+    trading_mode = mode
     if trading_mode.upper() == 'SCALPING':
         filename = f"{symbol}_Scalping_TA_Settings.csv"
     elif trading_mode.upper() == 'SWING':
@@ -101,5 +101,5 @@ def read_ta_settings(symbol, inputs_directory, watchlist_main_settings, logger):
 
             
 
-    logger.info(f"✅ Successfully read TA settings for symbol {symbol} 🎯")
+    logger.info(f"✅ Successfully read TA settings for symbol {symbol_combined} 🎯")
     return data, max(max_value, max_lookback)

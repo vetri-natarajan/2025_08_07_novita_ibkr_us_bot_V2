@@ -7,7 +7,7 @@ into the number of bars to slice for evaluation.
 """
 
 
-def resolve_mtf_lookback(symbol, main_settings, logger):
+def resolve_mtf_lookback(symbol_combined, symbol, main_settings, logger):
     """
     Compute MTF lookback bars from TF pairing.
 
@@ -22,9 +22,9 @@ def resolve_mtf_lookback(symbol, main_settings, logger):
     Raises:
         ValueError: When the configured higher and medium TFs are not supported.
     """
-    HH_LL_bars = int(main_settings[symbol]['HHLL'])
-    parsed_HTF = main_settings[symbol]["Parsed TF"][0]
-    parsed_MTF = main_settings[symbol]["Parsed TF"][1]
+    HH_LL_bars = int(main_settings[symbol_combined]['HHLL'])
+    parsed_HTF = main_settings[symbol_combined]["Parsed TF"][0]
+    parsed_MTF = main_settings[symbol_combined]["Parsed TF"][1]
 
     # Map supported TF pairings to a multiplier on HH_LL_bars.
     if parsed_HTF == '1 week' and parsed_MTF == '1 day':

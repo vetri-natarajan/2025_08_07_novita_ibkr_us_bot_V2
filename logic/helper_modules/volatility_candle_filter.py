@@ -8,7 +8,7 @@ Checks that per-bar percentage range stays within configured bounds.
 import numpy as np
 
 
-def passes_volatility_filter(symbol, main_settings, highs, lows, logger):
+def passes_volatility_filter(symbol_combined, symbol, main_settings, highs, lows, logger):
     """
     Validate per-bar volatility is within configured [lower, upper) bounds.
 
@@ -27,7 +27,7 @@ def passes_volatility_filter(symbol, main_settings, highs, lows, logger):
     # Avoid divide-by-zero; replace 0 lows with NaN then add epsilon to denominator.
     vol_percent = (highs - lows) * 100.0 / (lows.replace(0, np.nan) + 1e-8)
 
-    vol_filters = main_settings[symbol]['Parsed Each Volatility']
+    vol_filters = main_settings[symbol_combined]['Parsed Each Volatility']
     vol_filter_lower = vol_filters[0]
     vol_filter_upper = vol_filters[1]
 

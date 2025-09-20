@@ -105,12 +105,22 @@ def read_watchlist_main_config(file_path, logger):
     #print(df.columns)
     df = df.dropna(how="all")
 
+    logger.info('df in main settings ===========>\n')
+    logger.info(df)    
     
     # Convert to list of dictionaries for easier processing
     settings_list = df.to_dict(orient="records")
+  
+    logger.info('settings list ===========>\n')
+    logger.info(settings_list)  
     
-    symbol_list = [item["Symbol"] for item in settings_list]    
-    settings_by_symbol_dict = {item['Symbol']: item for item in settings_list}
+    
+    symbol_list = [item['Symbol'].upper() + '_' + item['Mode'].upper() for item in settings_list]    
+    settings_by_symbol_dict = {item['Symbol'].upper() + '_' + item['Mode'].upper(): item for item in settings_list}
+    
+    logger.info('settings_by_symbol_dict===========>\n')
+    logger.info(settings_by_symbol_dict)      
+    
     logger.info("\n\n\n parsing the hi_to-lo tf")
     for k, v  in settings_by_symbol_dict.items():
         

@@ -20,7 +20,7 @@ from logic.helper_modules import (
 )
 
 
-def check_MTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_MTF, logger):
+def check_MTF_conditions(symbol_combined, symbol, main_settings, ta_settings, max_look_back, df_MTF, logger):
     """
     Validate that the given MTF dataframe meets a series of filters.
 
@@ -44,7 +44,7 @@ def check_MTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_M
         return False
 
     # Compute how many recent bars to consider based on TF pairing rules.
-    mtf_look_back = resolve_mtf_lookback(symbol, main_settings, logger)
+    mtf_look_back = resolve_mtf_lookback(symbol_combined, symbol, main_settings, logger)
 
     # Slice last N bars, excluding the most recent incomplete one by convention.
     logger.info(f"📝 MTF before lastN ====>\n {df_MTF}")
@@ -55,7 +55,7 @@ def check_MTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_M
     opens, highs, lows, closes = extract_ohlc_as_float(lastN)
 
     # 1) Volatility filter (per-bar percent range).
-    if not passes_volatility_filter(symbol, main_settings, highs, lows, logger):
+    if not passes_volatility_filter(symbol_combined, symbol, main_settings, highs, lows, logger):
         return False
 
     # 2) Upper wick to body ratio cap.
@@ -71,10 +71,10 @@ def check_MTF_conditions(symbol, main_settings, ta_settings, max_look_back, df_M
         return False
 
     # 5) Technical confluence check at the MTF timeframe.
-    mtf_timeframe = main_settings[symbol]["Parsed Raw TF"][1]
+    mtf_timeframe = main_settings[symbol_combined]["Parsed Raw TF"][1]
     if not check_technical_confluence(mtf_timeframe, df_MTF, ta_settings, main_settings, logger):
-        logger.info("⚠️❌ MTF technical confluence not met...")
+        logger.info(f"⚠️❌ MTF technical confluence for {symbol_combined} not met...")
         return False
 
-    logger.info("✅📈 MTF all conditions are met...")
+    logger.info(f"✅📈 MTF for {symbol_combined} all conditions are met...")
     return True
