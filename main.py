@@ -99,14 +99,15 @@ async def run_backtest_entrypoint(ib, account_value, ib_connector):
         data_dir=data_directory
     )
     start_time = fetcher.get_start_time(end_time, duration_value, duration_unit)
-    print("start_time ===>", start_time)
-    print("end_time ===>", end_time)
+    logger.info(f"⏰ start_time ===> {start_time}")
+    logger.info(f"⏰ end_time ===> {end_time}")
+
     historical_vix_df = await fetcher.fetch_vix_data(start_time, end_time)
     historical_spx_df = await fetcher.fetch_spx_data(start_time, end_time)
-    print(len(historical_vix_df))
-    print(historical_vix_df)
-    print(len(historical_spx_df))
-    print(historical_spx_df)
+    logger.info(len(historical_vix_df))
+    logger.info(historical_vix_df)
+    logger.info(len(historical_spx_df))
+    logger.info(historical_spx_df)
     premarket_bt_checker = PreMarketChecksBacktest(
         historical_vix=historical_vix_df,
         historical_spx=historical_spx_df,
@@ -322,7 +323,7 @@ async def run_live_mode(ib_connector):
         
     for symbol_combined in symbol_list:
         symbol, mode = symbol_combined.split('_')
-        logger.info(f"symbol: {symbol}    mode: {mode}")
+        logger.info(f"📌 symbol: {symbol}    ⚙️ mode: {mode}")
         contract = ib_connector.create_stock_contract(symbol, exchange, currency)
         qualified = ib.qualifyContracts(contract)
         logger.info(f"✅ Qualified Contract: {qualified[0]}")

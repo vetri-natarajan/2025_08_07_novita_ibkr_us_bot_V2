@@ -69,4 +69,5 @@ FileNotFoundError: [Errno 2] No such file or directory: 'logs/states/order_state
 62. implemetn multiple timeframes for indicators
 63. impleemtn streamlined ports an dids
 64. in live mode first populate all the data then do the rest...
+65. in volume confirmation module - check when high..
 

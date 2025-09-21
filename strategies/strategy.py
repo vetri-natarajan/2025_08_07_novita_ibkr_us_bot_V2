@@ -55,18 +55,19 @@ def check_LTF_conditions(symbol_combined, symbol, main_settings, ta_settings, ma
             if not price_breakout_confirm(df_LTF, breakout_level, logger, is_live, live_price):
                 return False
     
-            vol_confirm_input = main_settings[symbol]['Volume Confirm']
-            if not volume_confirmation(df_LTF, symbol_combined, vol_confirm_input, logger):
+            vol_confirm_input = main_settings[symbol_combined]['Volume Confirm']
+            if not volume_confirmation(df_LTF, df_HTF, vol_confirm_input, logger):
                 return False
         
-            if entry_decision in ["PULLBACK", "BOTH"]:
-                if not pullback_retest(df_LTF, breakout_level, logger):
-                    return False
-        
-            # Technical confluence for LTF
-            ltf_timeframe = main_settings[symbol_combined]["Parsed Raw TF"][2]
-            if not check_technical_confluence(ltf_timeframe, df_LTF, ta_settings, main_settings, logger):
-                logger.info("⚠️❌ LTF technical confluence not met")
+        if entry_decision in ["PULLBACK", "BOTH"]:
+            if not pullback_retest(df_LTF, breakout_level, logger):
                 return False
+        
+        # Technical confluence for LTF
+        ltf_timeframe = main_settings[symbol_combined]["Parsed Raw TF"][2]
+        if not check_technical_confluence(ltf_timeframe, df_LTF, ta_settings, main_settings, logger):
+            logger.info("⚠️❌ LTF technical confluence not met")
+            return False
+        
     logger.info(f"✅📈 LTF [{symbol_combined}] all conditions are met...")
     return True

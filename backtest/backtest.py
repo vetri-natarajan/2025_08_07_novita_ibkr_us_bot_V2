@@ -137,8 +137,8 @@ class BacktestEngine:
         qty = int(alloc // price)
         return max(qty, 0)
 
-    def enter_trade(self, symbol, price, qty, sl_price, tp_price, signal, entry_time, side="BUY"):
-        if symbol in self.positions and self.positions[symbol]['qty'] != 0:
+    def enter_trade(self, symbol_combined, symbol, price, qty, sl_price, tp_price, signal, entry_time, side="BUY"):
+        if symbol in self.positions and self.positions[symbol_combined]['qty'] != 0:
             self.logger.info(f"Already have active position on {symbol}, skipping entry")
             return
 
@@ -154,7 +154,7 @@ class BacktestEngine:
         # Debit cash/equity at entry
         self.account_value -= cash_outlay
 
-        self.positions[symbol] = {
+        self.positions[symbol_combined] = {
             'entry_price': price,
             'qty': qty,
             'sl_price': sl_price,
@@ -168,6 +168,7 @@ class BacktestEngine:
             'profit_taken': False
         }
         self.trades.append({
+            'symbol_combined': symbol_combined,
             'symbol': symbol,
             'qty': qty,
             'entry_price': price,
@@ -220,11 +221,11 @@ class BacktestEngine:
 
         self.logger.info(f"Exited trade {symbol} qty {qty} at {price:.2f} time {time} gross: {gross_pnl:.2f} exit_comm: {exit_commission:.2f} net: {net_pnl:.2f} | equity: {self.account_value:.2f}")
 
-    def exit_trade_partial(self, symbol, price, time, qty_to_exit):
+    def exit_trade_partial(self, symbol_combined, symbol, price, time, qty_to_exit):
         if symbol not in self.positions or self.positions[symbol]['qty'] == 0:
             return
 
-        pos = self.positions[symbol]
+        pos = self.positions[symbol_combined]
         if qty_to_exit > pos['qty']:
             qty_to_exit = pos['qty']
 
@@ -255,6 +256,7 @@ class BacktestEngine:
             pos['pnl'] = None
 
         self.trades.append({
+            'symbol_combined': symbol_combined,
             'symbol': symbol,
             'qty': qty_to_exit,
             'entry_price': entry_price,
@@ -280,8 +282,8 @@ class BacktestEngine:
         duration_value=2,
         duration_unit='weeks',
         end_time=None,
-        save_data=True,
-        load_data=True
+        save_data=False,
+        load_data=False
     ):
         input_directory = config_dict.get("inputs_directory", "")
         backtest_dir = config_dict['backtest_directory']
@@ -305,16 +307,18 @@ class BacktestEngine:
 
         daily_checks = []
 
-        for i, symbol in enumerate(symbol_list):
+        for i, symbol_combined in enumerate(symbol_list):
+            symbol, mode = symbol_combined.split('_')
+            self.logger.info(f"📌 symbol: {symbol}    ⚙️ mode: {mode}")
             self.logger.info(f"🔄 Processing symbol {i}/{len(symbol_list)}: {symbol}")
 
-            ta_settings, max_look_back = read_ta_settings(symbol, input_directory, self.watchlist_main_settings, self.logger)
+            ta_settings, max_look_back = read_ta_settings(symbol_combined, symbol, mode, input_directory, self.watchlist_main_settings, self.logger)
 
             # Do NOT reset equity per symbol
-            exit_method = watchlist_main_settings[symbol]['Exit']
-            exit_sl_input = watchlist_main_settings[symbol]['SL']
-            exit_tp_input = watchlist_main_settings[symbol]['TP']
-            mode = watchlist_main_settings[symbol].get('Mode', '').lower()
+            exit_method = watchlist_main_settings[symbol_combined]['Exit']
+            exit_sl_input = watchlist_main_settings[symbol_combined]['SL']
+            exit_tp_input = watchlist_main_settings[symbol_combined]['TP']
+            mode = watchlist_main_settings[symbol_combined].get('Mode', '').lower()
 
             start_time = self.data_fetcher.get_start_time(end_time, duration_value, duration_unit)
             if start_time.tzinfo is None:
@@ -322,32 +326,32 @@ class BacktestEngine:
             if end_time.tzinfo is None:
                 end_time = tz.localize(end_time)
 
-            dfs, timeframes = await self.data_fetcher.fetch_multiple_timeframes(symbol, start_time, end_time, save=save_data, load=load_data)
+            dfs, timeframes = await self.data_fetcher.fetch_multiple_timeframes(symbol_combined, symbol, start_time, end_time, save=save_data, load=load_data)
             df_HTF = dfs.get(timeframes[0])
             df_MTF = dfs.get(timeframes[1])
             df_LTF = dfs.get(timeframes[2])
 
             if df_LTF is None or df_LTF.empty or df_HTF is None or df_MTF is None:
-                self.logger.warning(f"⚠️ Skipping {symbol} due to missing data.")
+                self.logger.warning(f"⚠️ Skipping {symbol_combined} due to missing data.")
                 continue
 
             unique_days = df_LTF.index.normalize().unique()
-            self.logger.info(f"📅 Backtesting {symbol} for {len(unique_days)} trading days")
+            self.logger.info(f"📅 Backtesting {symbol_combined} for {len(unique_days)} trading days")
 
-            for current_day in tqdm(unique_days, desc=f"Days for {symbol}", position=1, leave=False):
+            for current_day in tqdm(unique_days, desc=f"Days for {symbol_combined}", position=1, leave=False):
                 self.logger.info(f'\n📅 Current day ==> {current_day}')
                 passed, reason = self.premarket.run_checks_for_day(current_day.date())
                 if not any(d == current_day.date() for d in daily_checks):
                     daily_checks.append((current_day.date(), passed, reason))
                 if not passed:
-                    self.logger.warning(f"⚠️ Pre-market check failed for {symbol} on {current_day.date()}: {reason}")
+                    self.logger.warning(f"⚠️ Pre-market check failed for {symbol_combined} on {current_day.date()}: {reason}")
                     continue
 
                 day_start = current_day
                 day_end = current_day + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
                 df_LTF_day = df_LTF.loc[(df_LTF.index >= day_start) & (df_LTF.index <= day_end)]
 
-                for idx in tqdm(range(len(df_LTF_day)), desc=f"Processing bars {symbol} {current_day.date()}", position=2, leave=False):
+                for idx in tqdm(range(len(df_LTF_day)), desc=f"Processing bars {symbol_combined} {current_day.date()}", position=2, leave=False):
                     df_LTF_slice = df_LTF_day.iloc[:idx + 1]
                     current_time = df_LTF_slice.index[-1]
 
@@ -362,8 +366,8 @@ class BacktestEngine:
                     df_MTF_slice = df_MTF.loc[:current_time_utc]
 
                     if not self.order_testing:
-                        okHTF = check_HTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df_HTF_slice, self.logger)
-                        okMTF = check_MTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df_MTF_slice, self.logger)
+                        okHTF = check_HTF_conditions(symbol_combined, symbol, watchlist_main_settings, ta_settings, max_look_back, df_HTF_slice, self.logger)
+                        okMTF = check_MTF_conditions(symbol_combined, symbol, watchlist_main_settings, ta_settings, max_look_back, df_MTF_slice, self.logger)
                         if not (okHTF and okMTF):
                             continue
                         if len(df_LTF_slice) < 10:
@@ -371,10 +375,10 @@ class BacktestEngine:
                     else:
                         pass
 
-                    sig = check_LTF_conditions(symbol, watchlist_main_settings, ta_settings, max_look_back, df_LTF_slice, df_HTF_slice, self.logger)
+                    sig = check_LTF_conditions(symbol_combined, symbol, watchlist_main_settings, ta_settings, max_look_back, df_LTF_slice, df_HTF_slice, self.logger)
 
                     # Entry
-                    if sig and (symbol not in self.positions or self.positions[symbol]['qty'] == 0):
+                    if sig and (symbol_combined not in self.positions or self.positions[symbol_combined]['qty'] == 0):
                         try:
                             self.logger.info(
                                 f"df_HTF_slice --> {df_HTF_slice.tail()} | "
@@ -451,39 +455,39 @@ class BacktestEngine:
                             )
 
                         entry_time = current_time
-                        self.enter_trade(symbol, last_price, qty, sl_price, tp_price, sig, entry_time, side="BUY")
+                        self.enter_trade(symbol_combined, symbol, last_price, qty, sl_price, tp_price, sig, entry_time, side="BUY")
 
                     # Exit management for active positions
-                    if symbol in self.positions and self.positions[symbol]['qty'] > 0:
+                    if symbol_combined in self.positions and self.positions[symbol_combined]['qty'] > 0:
                         current_price = float(df_LTF_slice['close'].iloc[-1])
-                        entry_price = self.positions[symbol]['entry_price']
-                        entry_time = self.positions[symbol]['entry_time']
-                        side = self.positions[symbol]['side'].upper()
+                        entry_price = self.positions[symbol_combined]['entry_price']
+                        entry_time = self.positions[symbol_combined]['entry_time']
+                        side = self.positions[symbol_combined]['side'].upper()
                         record = {
-                            "qty": self.positions[symbol]['qty'],
-                            "profit_taken": self.positions[symbol].get("profit_taken", False)
+                            "qty": self.positions[symbol_combined]['qty'],
+                            "profit_taken": self.positions[symbol_combined].get("profit_taken", False)
                         }
 
                         if exit_method == "E3":
                             res = compute_dynamic_sl_swing(entry_price, current_price, record)
                             sl_price = res['stop_loss']
-                            if sl_price > self.positions[symbol]['sl_price']:
-                                self.positions[symbol]['sl_price'] = sl_price
-                                self.logger.info(f"🟡 SL moved up for {symbol} at {current_time}")
+                            if sl_price > self.positions[symbol_combined]['sl_price']:
+                                self.positions[symbol_combined]['sl_price'] = sl_price
+                                self.logger.info(f"🟡 SL moved up for {symbol_combined} at {current_time}")
                             if res['sl_triggered']:
-                                self.logger.info(f"🔴 SL triggered for {symbol} at {current_time}! Exiting.")
-                                self.exit_trade(symbol, current_price, current_time)
+                                self.logger.info(f"🔴 SL triggered for {symbol_combined} at {current_time}! Exiting.")
+                                self.exit_trade(symbol_combined, symbol, current_price, current_time)
                                 continue
                             if res['take_70_profit'] and not record.get("profit_taken", False):
                                 qty_to_exit = int(record["qty"] * 0.7)
                                 if qty_to_exit > 0:
-                                    self.exit_trade_partial(symbol, current_price, current_time, qty_to_exit)
-                                    self.positions[symbol]["profit_taken"] = True
-                                    self.logger.info(f"💰 Partial exit (70%) for {symbol} at {current_time}")
+                                    self.exit_trade_partial(symbol_combined, symbol, current_price, current_time, qty_to_exit)
+                                    self.positions[symbol_combined]["profit_taken"] = True
+                                    self.logger.info(f"💰 Partial exit (70%) for {symbol_combined} at {current_time}")
                             if res['exit_remaining']:
-                                if self.positions[symbol]['qty'] > 0:
-                                    self.exit_trade(symbol, current_price, current_time)
-                                    self.logger.info(f"🔵 Final exit for {symbol} at {current_time}")
+                                if self.positions[symbol_combined]['qty'] > 0:
+                                    self.exit_trade(symbol_combined, current_price, current_time)
+                                    self.logger.info(f"🔵 Final exit for {symbol_combined} at {current_time}")
                                     continue
 
                         elif exit_method == "E4":
@@ -491,47 +495,47 @@ class BacktestEngine:
                             vwap = vwap_series.iloc[-1] if not vwap_series.empty else None
                             res = compute_hedge_exit_trade(entry_price, current_price, vwap, entry_time, current_time)
                             sl_price = res['stop_loss']
-                            if sl_price > self.positions[symbol]['sl_price']:
-                                self.positions[symbol]['sl_price'] = sl_price
-                                self.logger.info(f"🟠 Hedge SL moved up for {symbol} at {current_time}")
+                            if sl_price > self.positions[symbol_combined]['sl_price']:
+                                self.positions[symbol_combined]['sl_price'] = sl_price
+                                self.logger.info(f"🟠 Hedge SL moved up for {symbol_combined} at {current_time}")
                             if res['sl_triggered']:
-                                self.logger.info(f"🛑 Hedge SL triggered for {symbol} at {current_time}, exiting.")
-                                self.exit_trade(symbol, current_price, current_time)
+                                self.logger.info(f"🛑 Hedge SL triggered for {symbol_combined} at {current_time}, exiting.")
+                                self.exit_trade(symbol_combined, symbol, current_price, current_time)
                                 continue
                             if res['take_profit']:
-                                self.logger.info(f"✅ Take profit hit for {symbol} at {current_time}, exiting.")
-                                self.exit_trade(symbol, current_price, current_time)
+                                self.logger.info(f"✅ Take profit hit for {symbol_combined} at {current_time}, exiting.")
+                                self.exit_trade(symbol_combined, symbol, current_price, current_time)
                                 continue
                             if res['auto_close']:
                                 self.logger.info(f"🚪 Auto-close for {symbol} at {current_time}.")
-                                self.exit_trade(symbol, current_price, current_time)
+                                self.exit_trade(symbol_combined, symbol, current_price, current_time)
                                 continue
 
                         elif mode == 'scalping':
                             if current_time.time() >= dt.time(15, 0):
-                                self.exit_trade(symbol, current_price, current_time)
-                                self.logger.info(f"🔔 Scalping exit for {symbol} at {current_time}")
+                                self.exit_trade(symbol_combined, symbol, current_price, current_time)
+                                self.logger.info(f"🔔 Scalping exit for {symbol_combined} at {current_time}")
                                 continue
 
-                        else:
-                            sl_price = self.positions[symbol]['sl_price']
-                            tp_price = self.positions[symbol]['tp_price']
+                        else: #E1, E2 exit
+                            sl_price = self.positions[symbol_combined]['sl_price']
+                            tp_price = self.positions[symbol_combined]['tp_price']
                             if side == "BUY":
                                 if current_price <= sl_price:
-                                    self.logger.info(f"🔴 SL hit for {symbol} at {current_time}! Exiting.")
-                                    self.exit_trade(symbol, current_price, current_time)
+                                    self.logger.info(f"🔴 SL hit for {symbol_combined} at {current_time}! Exiting.")
+                                    self.exit_trade(symbol_combined, symbol, current_price, current_time)
                                 elif current_price >= tp_price:
-                                    self.logger.info(f"✅ TP hit for {symbol} at {current_time}! Exiting.")
-                                    self.exit_trade(symbol, current_price, current_time)
+                                    self.logger.info(f"✅ TP hit for {symbol_combined} at {current_time}! Exiting.")
+                                    self.exit_trade(symbol_combined, symbol, current_price, current_time)
                             elif side == "SELL":
                                 if current_price >= sl_price:
-                                    self.logger.info(f"🔴 SL hit for {symbol} at {current_time}! Exiting.")
-                                    self.exit_trade(symbol, current_price, current_time)
+                                    self.logger.info(f"🔴 SL hit for {symbol_combined} at {current_time}! Exiting.")
+                                    self.exit_trade(symbol_combined, symbol, current_price, current_time)
                                 elif current_price <= tp_price:
-                                    self.logger.info(f"✅ TP hit for {symbol} at {current_time}! Exiting.")
-                                    self.exit_trade(symbol, current_price, current_time)
+                                    self.logger.info(f"✅ TP hit for {symbol_combined} at {current_time}! Exiting.")
+                                    self.exit_trade(symbol_combined, symbol, current_price, current_time)
 
-            self.logger.info(f"Backtest complete for {symbol}")
+            self.logger.info(f"Backtest complete for {symbol_combined}")
 
         # Finalize equity and reports
         now = dt.datetime.now()
@@ -641,7 +645,7 @@ class BacktestEngine:
                 continue
             cum_pnl += trade['pnl']
             account_value = trade.get('account_value', self.account_value)
-            symbol = trade['symbol']
+            symbol = trade['symbol_combined']
             qty = trade['qty']
             side = 'long' if trade.get('side', 'BUY').upper() == 'BUY' else 'short'
             entry_dt = trade['entry_time']

@@ -58,8 +58,10 @@ class HistoricalDataFetcher:
         filepath = self.get_filepath(symbol, timeframe, start_time, end_time)
         df.to_parquet(filepath)
         self.logger.info(f"Saved data to {filepath}")
-
-    async def fetch_paginated_data(self, symbol: str, timeframe: str, start_time: datetime, end_time: datetime, fetch_index = False) -> pd.DataFrame:
+                                      
+    async def fetch_paginated_data(self, symbol_combined: str, symbol: str, timeframe: str, start_time: datetime, end_time: datetime, fetch_index = False) -> pd.DataFrame:
+        
+        self.logger.info(f"📄 symbol: {symbol}")   
         if fetch_index:
             contract = Index(symbol, self.exchange_index, self.currency)
             await self.ib_connector.ensure_connected()
@@ -69,7 +71,7 @@ class HistoricalDataFetcher:
             contract = Stock(symbol, self.exchange, self.currency)
             await self.ib_connector.ensure_connected()
             qualified = self.ib.qualifyContracts(contract)
-            
+        self.logger.info(f"📄 Contract: {contract}")    
         self.logger.info(f"✅ Qualified Contract: {qualified[0]}")
         self.logger.info(f"📌 conId: {qualified[0].conId}")
         
@@ -95,10 +97,10 @@ class HistoricalDataFetcher:
             segments.append((current_start, current_end))
             current_end = current_start - timedelta(seconds=1)
 
-        self.logger.info(f"Fetching {len(segments)} segments for {symbol} {timeframe} from {start_time} to {end_time}")
+        self.logger.info(f"Fetching {len(segments)} segments for {symbol_combined} {timeframe} from {start_time} to {end_time}")
 
         # Progress bar usage
-        for current_start, current_end in tqdm(segments, desc=f'Fetching {symbol} {timeframe}', unit='segment'):
+        for current_start, current_end in tqdm(segments, desc=f'Fetching {symbol_combined} {timeframe}', unit='segment'):
             end_str = current_end.strftime('%Y%m%d %H:%M:%S')
             duration_days = (current_end - current_start).days + 1
             duration_str = f"{duration_days} D"
@@ -116,16 +118,16 @@ class HistoricalDataFetcher:
                     formatDate=1
                 )
             except Exception as e:
-                self.logger.error(f"Error fetching {symbol} {timeframe} from {current_start} to {current_end}: {e}")
+                self.logger.error(f"Error fetching {symbol_combined} {timeframe} from {current_start} to {current_end}: {e}")
                 break
             if not partial_bars:
-                self.logger.warning(f"No data returned for {symbol} {timeframe} from {current_start} to {current_end}")
+                self.logger.warning(f"No data returned for {symbol_combined} {timeframe} from {current_start} to {current_end}")
                 break
             bars.extend(partial_bars)
             await asyncio.sleep(0.2)  # avoid IB limits
         
         if not bars:
-            self.logger.warning(f"No historical data fetched for {symbol} {timeframe}")
+            self.logger.warning(f"No historical data fetched for {symbol_combined} {timeframe}")
             return pd.DataFrame()
         
         df = util.df(bars)
@@ -156,19 +158,30 @@ class HistoricalDataFetcher:
         
         print('df.tail===>', df)
 
-        self.logger.info(f"Completed fetching historical data for {symbol} {timeframe} with {len(df)} records")
+        self.logger.info(f"Completed fetching historical data for {symbol_combined} {timeframe} with {len(df)} records")
 
         return df
 
-    async def fetch_multiple_timeframes(self, symbol, start_time, end_time, save=False, load=False):
-        timeframes = self.watchlist_main_settings[symbol]['Parsed TF']
+    async def fetch_multiple_timeframes(self, symbol_combined, symbol, start_time, end_time, save=False, load=False):
+        self.logger.info("\n\n\nin fetch_multiple_timeframes===>")
+        self.logger.info(f"symbol_combined ===> {symbol_combined}")
+        self.logger.info(f"start_time ===> {start_time}")
+        self.logger.info(f"end_time ===> {end_time}")
+        
+        timeframes = self.watchlist_main_settings[symbol_combined]['Parsed TF']
         dfs = {}
         for tf in timeframes:
             df = None
             if load:
-                df = self.load_data(symbol, tf, start_time, end_time)
+                df = self.load_data(symbol_combined, tf, start_time, end_time)
             if df is None or df.empty:
-                df = await self.fetch_paginated_data(symbol, tf, start_time, end_time)
+                self.logger.info(f" 📄 before: {symbol_combined}") 
+                self.logger.info(f" 📄 before: {symbol}") 
+                self.logger.info(f" 📄 before: {tf}") 
+                self.logger.info(f" 📄 before: {start_time}") 
+                self.logger.info(f" 📄 before: {end_time}") 
+                
+                df = await self.fetch_paginated_data(symbol_combined, symbol, tf, start_time, end_time)
                 if save and not df.empty:
                     self.save_data(df, symbol, tf, start_time, end_time)
             dfs[tf] = df
@@ -182,7 +195,7 @@ class HistoricalDataFetcher:
         if load:
             df = self.load_data(symbol, timeframe, start_time, end_time)
         if df is None or df.empty:
-            df = await self.fetch_paginated_data(symbol, timeframe, start_time, end_time, True)
+            df = await self.fetch_paginated_data(symbol, symbol, timeframe, start_time, end_time, True)
             #print("df in vix_data===>")
             #print(df)
             if save and not df.empty:
@@ -198,7 +211,7 @@ class HistoricalDataFetcher:
             #print("df in spx_data===>")
             #print(df)
         if df is None or df.empty:
-            df = await self.fetch_paginated_data(symbol, timeframe, start_time, end_time, True)
+            df = await self.fetch_paginated_data(symbol, symbol, timeframe, start_time, end_time, True)
             if save and not df.empty:
                 self.save_data(df, symbol, timeframe, start_time, end_time)
         return df

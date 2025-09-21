@@ -22,6 +22,7 @@ def volume_confirmation(df_LTF, df_HTF, vol_confirm_input, logger):
             return False
 
     elif vol_confirm_input in ['H', "HIGH"]:
+        logger.info(f"tail htf ===> {df_HTF}")
         last_htf_bar_time = df_HTF.index[-1]
         htf_bar_open_time = last_htf_bar_time - pd.Timedelta(minutes=30)
 
