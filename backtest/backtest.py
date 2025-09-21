@@ -274,7 +274,7 @@ class BacktestEngine:
         })
         self.logger.info(f"Partially exited trade {symbol} qty {qty_to_exit} at {price:.2f} time {time} net: {net_pnl:.2f} | equity: {self.account_value:.2f}")
 
-    async def run_backtest(
+    async def run_backtest_old(
         self,
         config_dict,
         symbol_list,
@@ -558,11 +558,8 @@ class BacktestEngine:
 
         self.stop_backtest_logging()
         self.ib.disconnect()
-
-
-
-
-    async def run_backtest_new(
+          
+    async def run_backtest(
         self,
         config_dict,
         symbol_list,
@@ -570,11 +567,267 @@ class BacktestEngine:
         duration_value=2,
         duration_unit='weeks',
         end_time=None,
-        save_data=True,
-        load_data=True
+        save_data=False,
+        load_data=False
     ):
-        
-        pass
+        input_directory = config_dict.get("inputs_directory", "")
+        backtest_dir = config_dict['backtest_directory']
+        ensure_directory(backtest_dir, self.logger)
+    
+        now = dt.datetime.now()
+        timestamp_str = time_to_str(now, only_date=True)
+        addl_log = make_path(backtest_dir, f"backtest_additional_{timestamp_str}.log")
+        self.start_backtest_logging(addl_log)
+    
+        self.logger.info("🚀 Starting backtest")
+    
+        if end_time is None:
+            end_time = dt.datetime.now()
+        tz = pytz.timezone(config_dict['trading_time_zone'])
+    
+        self.account_value = float(config_dict['trading_capital'])
+        self.starting_equity = float(self.account_value)
+    
+        # 1) Preload all data & settings for all symbols once
+        universe = {}
+        global_time_index = None  # LTF-aligned global market clock
+        start_time = self.data_fetcher.get_start_time(end_time, duration_value, duration_unit)
+        if start_time.tzinfo is None:
+            start_time = tz.localize(start_time)
+        if end_time.tzinfo is None:
+            end_time = tz.localize(end_time)
+    
+        for i, symbol_combined in enumerate(symbol_list):
+            symbol, _mode = symbol_combined.split('_')
+            self.logger.info(f"📌 symbol: {symbol}  ⚙️ mode: {_mode}")
+            ta_settings, max_look_back = read_ta_settings(
+                symbol_combined, symbol, _mode, input_directory, self.watchlist_main_settings, self.logger
+            )
+    
+            exit_method = watchlist_main_settings[symbol_combined]['Exit']
+            exit_sl_input = watchlist_main_settings[symbol_combined]['SL']
+            exit_tp_input = watchlist_main_settings[symbol_combined]['TP']
+            mode = watchlist_main_settings[symbol_combined].get('Mode', '').lower()
+    
+            dfs, timeframes = await self.data_fetcher.fetch_multiple_timeframes(
+                symbol_combined, symbol, start_time, end_time, save=save_data, load=load_data
+            )
+            df_HTF = dfs.get(timeframes[0])
+            df_MTF = dfs.get(timeframes[1])
+            df_LTF = dfs.get(timeframes[2])
+    
+            if df_LTF is None or df_LTF.empty or df_HTF is None or df_MTF is None:
+                self.logger.warning(f"⚠️ Skipping {symbol_combined} due to missing data.")
+                continue
+    
+            # Normalize indexes to UTC and ensure monotonicity
+            df_HTF.index = ensure_utc(pd.to_datetime(df_HTF.index)).sort_values()
+            df_MTF.index = ensure_utc(pd.to_datetime(df_MTF.index)).sort_values()
+            df_LTF.index = ensure_utc(pd.to_datetime(df_LTF.index)).sort_values()
+    
+            # Collect for universe
+            universe[symbol_combined] = dict(
+                symbol=symbol,
+                ta_settings=ta_settings,
+                max_look_back=max_look_back,
+                exit_method=exit_method,
+                exit_sl_input=exit_sl_input,
+                exit_tp_input=exit_tp_input,
+                mode=mode,
+                df_HTF=df_HTF,
+                df_MTF=df_MTF,
+                df_LTF=df_LTF
+            )
+    
+            # Build/expand global LTF clock
+            global_time_index = df_LTF.index if global_time_index is None else global_time_index.union(df_LTF.index)
+    
+        if not universe or global_time_index is None or len(global_time_index) == 0:
+            self.logger.warning("No data loaded for any symbols; aborting.")
+            self.stop_backtest_logging()
+            return
+    
+        global_time_index = global_time_index.sort_values()
+    
+        # 2) Pre-compute unique trading days for premarket checks from global clock (localize to trading TZ for day boundaries)
+        global_days_local = pd.DatetimeIndex(global_time_index.tz_convert(tz)).normalize().unique()
+        self.logger.info(f"📅 Backtesting {len(universe)} symbols over {len(global_days_local)} trading days total")
+    
+        daily_checks = []
+        # 3) Outer loop: time first (event/heartbeat)
+        #   We will do day-level premarket once per day, then iterate all bars in that day’s window.
+        #   Within each bar, iterate symbols.
+        for current_day_local in tqdm(global_days_local, desc="Days", position=0, leave=True):
+            day_passed, reason = self.premarket.run_checks_for_day(current_day_local.date())
+            if not any(d == current_day_local.date() for (d, _, _) in daily_checks):
+                daily_checks.append((current_day_local.date(), day_passed, reason))
+    
+            if not day_passed:
+                self.logger.warning(f"⚠️ Pre-market failed on {current_day_local.date()}: {reason}")
+                continue
+    
+            # Day window (local day to UTC bounds)
+            day_start_local = current_day_local
+            day_end_local = current_day_local + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+            day_mask = (global_time_index.tz_convert(tz) >= day_start_local) & (global_time_index.tz_convert(tz) <= day_end_local)
+            day_times = global_time_index[day_mask]
+    
+            for current_time_utc in tqdm(day_times, desc=f"Bars {current_day_local.date()}", position=1, leave=False):
+                # Respect trading windows in local time
+                current_time_local = current_time_utc.tz_convert(tz)
+                if not is_time_in_trading_windows(current_time_local.time(), self.config_dict['trading_windows']):
+                    continue
+    
+                # 4) For each symbol, compute slices up to t and run logic
+                for symbol_combined, meta in universe.items():
+                    symbol = meta['symbol']
+                    df_LTF = meta['df_LTF']
+                    # Skip if this symbol has no bar up to current_time_utc yet
+                    if current_time_utc < df_LTF.index[0]:
+                        continue
+    
+                    df_LTF_slice = df_LTF.loc[:current_time_utc]
+                    if df_LTF_slice.empty:
+                        continue
+    
+                    # HTF/MTF aligned up to t
+                    df_HTF_slice = meta['df_HTF'].loc[:current_time_utc]
+                    df_MTF_slice = meta['df_MTF'].loc[:current_time_utc]
+                    if df_HTF_slice.empty or df_MTF_slice.empty:
+                        continue
+    
+                    # HTF/MTF gating unless in order_testing
+                    if not self.order_testing:
+                        okHTF = check_HTF_conditions(symbol_combined, symbol, watchlist_main_settings, meta['ta_settings'], meta['max_look_back'], df_HTF_slice, self.logger)
+                        okMTF = check_MTF_conditions(symbol_combined, symbol, watchlist_main_settings, meta['ta_settings'], meta['max_look_back'], df_MTF_slice, self.logger)
+                        if not (okHTF and okMTF):
+                            continue
+                        if len(df_LTF_slice) < 10:
+                            continue
+    
+                    sig = check_LTF_conditions(symbol_combined, symbol, watchlist_main_settings, meta['ta_settings'], meta['max_look_back'], df_LTF_slice, df_HTF_slice, self.logger)
+    
+                    # Entry
+                    if sig and (symbol_combined not in self.positions or self.positions[symbol_combined]['qty'] == 0):
+                        last_price = float(df_LTF_slice['close'].iloc[-1])
+    
+                        qty_equity = self.compute_qty(last_price)
+                        vix = self.premarket.get_close_price(self.premarket.vix_df, current_time_local.date())
+                        qty_vix = external_compute_qty(
+                            self.account_value,
+                            self.percent_of_account_value,
+                            units=int(self.config_dict.get("trading_units", 5)),
+                            price=last_price,
+                            vix=vix,
+                            vix_threshold=float(self.config_dict.get("vix_threshold", 20)),
+                            vix_reduction_factor=float(self.config_dict.get("vix_reduction_factor", 1)),
+                            skip_on_high_vix=bool(self.config_dict.get("skip_on_high_vix", False)),
+                        )
+                        qty = max(min(qty_equity, qty_vix), 0)
+                        if qty <= 0:
+                            continue
+    
+                        exit_method = meta['exit_method']
+                        sl_in = meta['exit_sl_input']
+                        tp_in = meta['exit_tp_input']
+    
+                        # Compute SL/TP
+                        last_price = float(df_LTF_slice['close'].iloc[-1])
+                        if exit_method == "E1":
+                            sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_pct=sl_in, tp_pct=tp_in)
+                        elif exit_method == "E2":
+                            try:
+                                atr_val = float(calculate_atr(df_LTF_slice, 5).iloc[-1])
+                            except Exception:
+                                atr_val = None
+                            if atr_val is not None:
+                                sl_price, tp_price = compute_atr_sl_tp(last_price, atr_val, k_sl=sl_in, k_tp=tp_in)
+                            else:
+                                sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_pct=sl_in, tp_pct=tp_in)
+                        elif exit_method in ['E3', 'E4']:
+                            sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_pct=2, tp_pct=4)
+                        else:
+                            sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_pct=sl_in, tp_pct=tp_in)
+    
+                        self.enter_trade(
+                            symbol_combined, symbol, last_price, qty, sl_price, tp_price, sig,
+                            entry_time=current_time_utc, side="BUY"
+                        )
+    
+                    # Exit management
+                    if symbol_combined in self.positions and self.positions[symbol_combined]['qty'] > 0:
+                        current_price = float(df_LTF_slice['close'].iloc[-1])
+                        entry_price = self.positions[symbol_combined]['entry_price']
+                        entry_time = self.positions[symbol_combined]['entry_time']
+                        side = self.positions[symbol_combined]['side'].upper()
+                        record = {
+                            "qty": self.positions[symbol_combined]['qty'],
+                            "profit_taken": self.positions[symbol_combined].get("profit_taken", False)
+                        }
+                        exit_method = meta['exit_method']
+                        mode = meta['mode']
+    
+                        if exit_method == "E3":
+                            res = compute_dynamic_sl_swing(entry_price, current_price, record)
+                            sl_price = res['stop_loss']
+                            if sl_price > self.positions[symbol_combined]['sl_price']:
+                                self.positions[symbol_combined]['sl_price'] = sl_price
+                            if res['sl_triggered']:
+                                self.exit_trade(symbol_combined, symbol, current_price, current_time_utc)
+                                continue
+                            if res['take_70_profit'] and not record.get("profit_taken", False):
+                                qty_to_exit = int(record["qty"] * 0.7)
+                                if qty_to_exit > 0:
+                                    self.exit_trade_partial(symbol_combined, symbol, current_price, current_time_utc, qty_to_exit)
+                                    self.positions[symbol_combined]["profit_taken"] = True
+                            if res['exit_remaining']:
+                                if self.positions[symbol_combined]['qty'] > 0:
+                                    self.exit_trade(symbol_combined, symbol, current_price, current_time_utc)
+                                    continue
+    
+                        elif exit_method == "E4":
+                            vwap_series = calculate_vwap(df_LTF_slice)
+                            vwap = vwap_series.iloc[-1] if not vwap_series.empty else None
+                            res = compute_hedge_exit_trade(entry_price, current_price, vwap, entry_time, current_time_utc)
+                            sl_price = res['stop_loss']
+                            if sl_price > self.positions[symbol_combined]['sl_price']:
+                                self.positions[symbol_combined]['sl_price'] = sl_price
+                            if res['sl_triggered'] or res['take_profit'] or res['auto_close']:
+                                self.exit_trade(symbol_combined, symbol, current_price, current_time_utc)
+                                continue
+    
+                        elif mode == 'scalping':
+                            if current_time_local.time() >= dt.time(15, 0):
+                                self.exit_trade(symbol_combined, symbol, current_price, current_time_utc)
+                                continue
+    
+                        else:  # E1/E2 fixed/ATR
+                            sl_price = self.positions[symbol_combined]['sl_price']
+                            tp_price = self.positions[symbol_combined]['tp_price']
+                            if side == "BUY":
+                                if current_price <= sl_price or current_price >= tp_price:
+                                    self.exit_trade(symbol_combined, symbol, current_price, current_time_utc)
+                            elif side == "SELL":
+                                if current_price >= sl_price or current_price <= tp_price:
+                                    self.exit_trade(symbol_combined, symbol, current_price, current_time_utc)
+    
+        # 5) Finalize
+        now = dt.datetime.now()
+        timestamp_str = time_to_str(now, only_date=True)
+        start_str = time_to_str(start_time, only_date=True)
+        end_str = time_to_str(end_time, only_date=True)
+    
+        self.ending_equity = float(self.account_value)
+        self.logger.info(f"Starting equity: {self.starting_equity:.2f} | Ending equity: {self.ending_equity:.2f}")
+    
+        daily_checks_file = f"daily_pre_checks_report_{timestamp_str}_{start_str}_{end_str}"
+        self.write_daily_checks_to_file(daily_checks, daily_checks_file)
+    
+        self.report_results()
+        backtest_file = f"portfolio_{timestamp_str}_{start_str}_{end_str}"
+        self.write_trades_to_file(backtest_dir, f"{backtest_file}_backtest_reports")
+        self.stop_backtest_logging()
+        self.ib.disconnect()
 
     def report_results(self):
         total_trades = len([t for t in self.trades if t.get('pnl') is not None])
