@@ -63,11 +63,22 @@ def check_LTF_conditions(symbol_combined, symbol, main_settings, ta_settings, ma
             if not pullback_retest(df_LTF, breakout_level, logger):
                 return False
         
+        '''
         # Technical confluence for LTF
         ltf_timeframe = main_settings[symbol_combined]["Parsed Raw TF"][2]
         if not check_technical_confluence(ltf_timeframe, df_LTF, ta_settings, main_settings, logger):
             logger.info("⚠️❌ LTF technical confluence not met")
             return False
+        '''
+
         
     logger.info(f"✅📈 LTF [{symbol_combined}] all conditions are met...")
     return True
+
+
+def check_technical_confluence(timeframe, df_TF, ta_settings, main_settings, logger) -> bool:
+    pass
+
+def check_TA_confluence(ALWAYS_TFS, timeframe, df_TF, ta_settings, main_settings, logger):
+    
+    pass

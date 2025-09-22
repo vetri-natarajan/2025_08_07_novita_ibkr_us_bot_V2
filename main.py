@@ -84,6 +84,9 @@ ib = IB()
 htf_signals = {}
 mtf_signals = {}
 
+
+ALWAYS_TFS = ["1 week", "1 day", "4 hours", "1 hour", "30 mins", "15 mins", "5 mins", "1 min"]  # labels must match StreamingData [attached_file:1][attached_file:2]
+
 async def run_backtest_entrypoint(ib, account_value, ib_connector):    
     logger.info("🔍📈 Entering backtest module")
     import datetime as dt
@@ -159,6 +162,7 @@ async def process_trading_signals_cached(symbol_combined, symbol, timeframe, df_
             logger.info(f"⏸️ LTF conditions not met for {symbol_combined}")
             return False
        
+        
         
         ticker = streaming_data.tickers.get(symbol)
         last_price = None
@@ -321,6 +325,29 @@ async def run_live_mode(ib_connector):
     except Exception:
         vix = vix_threshold
         
+    #subscribe to all the time frames
+    # Fixed timeframe set for universal subscription (parsed_tf is a subset of these)
+
+    for symbol_combined in symbol_list:
+        symbol, mode = symbol_combined.split('_')
+        logger.info(f"📌 symbol: {symbol}    ⚙️ mode: {mode}")
+        contract = ib_connector.create_stock_contract(symbol, exchange, currency)
+        qualified = ib.qualifyContracts(contract)
+        logger.info(f"✅ Qualified Contract: {qualified[0]}")
+        logger.info(f"📌 conId: {qualified[0].conId}")
+        
+        parsed_tf = watchlist_main_settings[symbol_combined]['Parsed TF']
+        ta_settings, max_look_back = read_ta_settings(symbol_combined, symbol, mode, inputs_directory, watchlist_main_settings, logger)
+        max_tf = parsed_tf[0]
+
+        # Subscribe the fixed set for data availability (independent of parsed_tf)
+        for tf in ALWAYS_TFS:
+            logger.info(f"📡 Subscribing for symbol: [{symbol}] ⏱️ timeframe: {tf}")
+            subscribed = await streaming_data.subscribe(contract, tf, max_tf, max_look_back, order_testing)
+            if not subscribed:
+                logger.warning(f"Subscription failed for {symbol} {tf}")
+                continue
+    '''
     for symbol_combined in symbol_list:
         symbol, mode = symbol_combined.split('_')
         logger.info(f"📌 symbol: {symbol}    ⚙️ mode: {mode}")
@@ -362,6 +389,8 @@ async def run_live_mode(ib_connector):
                 asyncio.create_task(on_bar_handler_wrapper(symbol, tf, seeded_df))
             else:
                 logger.warning(f"⚠️ No seeded historical data to trigger initial callback for {symbol} [{tf}]")
+
+    '''   
 
 
 

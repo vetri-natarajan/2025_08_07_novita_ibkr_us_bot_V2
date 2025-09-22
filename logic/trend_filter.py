@@ -48,10 +48,12 @@ def check_HTF_conditions(symbol_combined, symbol, main_settings, ta_settings, ma
     if not check_max_drawdown(highs, lows, dd_limits, logger):        
         return False
 
+    '''
     # Technical confluence check
     htf_timeframe = main_settings[symbol_combined]["Parsed Raw TF"][0]
     if not check_technical_confluence(htf_timeframe, df_HTF, ta_settings, main_settings, logger):
         logger.info("⚠️❌ HTF technical confluence for symbol {symbol_combined} not met...")
         return False
+    '''
     logger.info(f"✅📈 HTF all conditions for symbol {symbol_combined} are met...")
     return True

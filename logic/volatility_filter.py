@@ -70,11 +70,14 @@ def check_MTF_conditions(symbol_combined, symbol, main_settings, ta_settings, ma
     if not passes_parabolic_gain(opens, highs, lows, closes, logger):
         return False
 
+    '''
     # 5) Technical confluence check at the MTF timeframe.
     mtf_timeframe = main_settings[symbol_combined]["Parsed Raw TF"][1]
     if not check_technical_confluence(mtf_timeframe, df_MTF, ta_settings, main_settings, logger):
         logger.info(f"⚠️❌ MTF technical confluence for {symbol_combined} not met...")
         return False
+    '''
+
 
     logger.info(f"✅📈 MTF for {symbol_combined} all conditions are met...")
     return True

@@ -19,21 +19,14 @@ PARENT_TF = {
     '2 mins':  ('1 min', 2),    # 2 × 1m = 2m  
     '3 mins':  ('1 min', 3),    # 3 × 1m = 3m      
     '5 mins':  ('1 min', 5),    # 5 × 1m = 5m
-    '30 mins': ('5 mins', 6),   # 6 × 5m = 30m
-    '1 day':   ('5 mins', 78),  # 78 × 5m = 390 minutes (US equities RTH)
+    '15 mins':  ('1 min', 15),    # 3 × 5m = 15m
+    '30 mins': ('1 min', 30),   # 2 × 15m = 30m
+    '1 hour':  ('1 min', 60),    # 2 × 30m = 1h
+    '4 hours':  ('1 min', 240),    # 2 × 30m = 1h
+    '1 day':   ('1 min', 390),  # 78 × 5 x 5 = 390 minutes (US equities RTH)
     '1 week':  ('1 day', 5),    # 5 × 1d = 1w (trading days)
 }
 
-# Kept for historical duration heuristics only if needed; not used for aggregation math
-TF_TO_MINUTES = {
-    '1 min': 1,
-    '2 mins': 2,
-    '3 mins': 3,
-    '5 mins': 5,
-    '30 mins': 30,
-    '1 day': 24 * 60,   # not used for aggregation math (RTH vs full day differs)
-    '1 week': 5 * 24 * 60,  # naive placeholder
-}
 
 MAX_TF_TO_LTF = {
     '1 week': {'1 week': 1, '1 day': 5, '5 mins': 78 * 5},
@@ -61,29 +54,49 @@ def floor_time_to_tf(dt: datetime, target_tf: str, tz) -> datetime:
 
     if target_tf == '5 secs':
         return dt.replace(second=(dt.second // 5) * 5, microsecond=0)
+
     if target_tf == '1 min':
         return dt.replace(second=0, microsecond=0)
+
     if target_tf == '2 mins':
         m = (dt.minute // 2) * 2
         return dt.replace(minute=m, second=0, microsecond=0)
+
     if target_tf == '3 mins':
         m = (dt.minute // 3) * 3
         return dt.replace(minute=m, second=0, microsecond=0)
+
     if target_tf == '5 mins':
         m = (dt.minute // 5) * 5
         return dt.replace(minute=m, second=0, microsecond=0)
+
+    if target_tf == '15 mins':
+        m = (dt.minute // 15) * 15
+        return dt.replace(minute=m, second=0, microsecond=0)
+
     if target_tf == '30 mins':
         m = (dt.minute // 30) * 30
         return dt.replace(minute=m, second=0, microsecond=0)
+
+    if target_tf == '1 hour':
+        return dt.replace(minute=0, second=0, microsecond=0)
+
+    if target_tf == '4 hours':
+        h = (dt.hour // 4) * 4
+        return dt.replace(hour=h, minute=0, second=0, microsecond=0)
+
     if target_tf == '1 day':
         # Simplified: calendar day in tz
         return dt.replace(hour=0, minute=0, second=0, microsecond=0)
+
     if target_tf == '1 week':
         # Simplified: week starts Monday in tz
         start = dt - timedelta(days=dt.weekday())
         return start.replace(hour=0, minute=0, second=0, microsecond=0)
+
     # Fallback: zero microseconds
     return dt.replace(microsecond=0)
+
 
 class BarAggregator:
     """
@@ -196,6 +209,8 @@ class StreamingData:
             duration_str_value = int(duration_value / division_factor)
             if duration_str_value == 0 and timeframe == '1 day':
                 duration_str_value = 5
+            if duration_str_value == 0 and timeframe == '5 mins':
+                duration_str_value = 1
             duration_str = f"{duration_str_value} W"
             self.logger.info(f"📅 Duration string set to {duration_str} (weekly)")
         elif max_tf.lower() == "30 mins":
