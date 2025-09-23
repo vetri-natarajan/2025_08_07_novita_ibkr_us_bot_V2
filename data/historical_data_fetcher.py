@@ -78,7 +78,7 @@ class HistoricalDataFetcher:
         bars = []
         current_end = end_time
         max_delta = timedelta(days=self.max_days_per_request)
-
+        '''
         bar_size_map = {
             '1 min': '1 min',
             '5 min': '5 mins',
@@ -89,7 +89,9 @@ class HistoricalDataFetcher:
             '1 month': '1 month'
         }
         bar_size_setting = bar_size_map.get(timeframe.lower(), timeframe)
+        '''
 
+        bar_size_setting = timeframe.lower()
         # Create list of segments to fetch for progress tracking
         segments = []
         while current_end > start_time:
@@ -147,45 +149,48 @@ class HistoricalDataFetcher:
             start_time = start_time.replace(tzinfo=pytz.timezone(self.time_zone))
         if end_time.tzinfo is None:
             end_time = end_time.replace(tzinfo=pytz.timezone(self.time_zone))
-            
+        '''   
         print('type', type(df.index ))       
         print('type', type(start_time))
         print('df.index===>', df.index)
         print('start_time===>', start_time)
         print('end_time===>', end_time)
+        '''
     
         df = df[(df.index >= start_time) & (df.index <= end_time)]
         
-        print('df.tail===>', df)
+        #print('df.tail===>', df)
 
         self.logger.info(f"Completed fetching historical data for {symbol_combined} {timeframe} with {len(df)} records")
 
         return df
 
-    async def fetch_multiple_timeframes(self, symbol_combined, symbol, start_time, end_time, save=False, load=False):
+    async def fetch_multiple_timeframes(self, symbol_combined, symbol, ALWAYS_TFS, start_time, end_time, save=False, load=False):
         self.logger.info("\n\n\nin fetch_multiple_timeframes===>")
         self.logger.info(f"symbol_combined ===> {symbol_combined}")
         self.logger.info(f"start_time ===> {start_time}")
         self.logger.info(f"end_time ===> {end_time}")
         
-        timeframes = self.watchlist_main_settings[symbol_combined]['Parsed TF']
+        timeframes = ALWAYS_TFS
         dfs = {}
         for tf in timeframes:
             df = None
             if load:
                 df = self.load_data(symbol_combined, tf, start_time, end_time)
             if df is None or df.empty:
+                '''
                 self.logger.info(f" 📄 before: {symbol_combined}") 
                 self.logger.info(f" 📄 before: {symbol}") 
                 self.logger.info(f" 📄 before: {tf}") 
                 self.logger.info(f" 📄 before: {start_time}") 
                 self.logger.info(f" 📄 before: {end_time}") 
+                '''
                 
                 df = await self.fetch_paginated_data(symbol_combined, symbol, tf, start_time, end_time)
                 if save and not df.empty:
                     self.save_data(df, symbol, tf, start_time, end_time)
             dfs[tf] = df
-        return dfs, timeframes
+        return dfs
 
 
     async def fetch_vix_data(self, start_time: datetime, end_time: datetime, save=False, load=False):

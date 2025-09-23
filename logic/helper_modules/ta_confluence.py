@@ -26,10 +26,12 @@ def check_technical_confluence(timeframe, df_TF, ta_settings, main_settings, log
     from indicators.adx import calculate_adx
     from indicators.atr import calculate_atr
     from indicators.obv import calculate_obv
-
+    count = []
     if check_rsi:
+        count.append(True)
         rsi_look_back = int(ta_settings["RSI"]['other_columns']['Lookback'])
         rsi_threshold = float(ta_settings["RSI"]['value'])
+        logger.info(f"df_TF in rsi===> {timeframe} \n {df_TF.tail()}")
         if rsi_look_back >= len(df_TF):
             logger.warning(f"🚫 RSI lookback ({rsi_look_back}) >= DataFrame rows ({len(df_TF)}). Not enough data! ❌")
             return False
@@ -41,6 +43,7 @@ def check_technical_confluence(timeframe, df_TF, ta_settings, main_settings, log
             return False
 
     if check_macd:
+        count.append(True)
         macd_settings = ta_settings["MACD"]['parsed_value']
         macd_max_look_back = max(macd_settings)
         if macd_max_look_back >= len(df_TF):
@@ -54,6 +57,7 @@ def check_technical_confluence(timeframe, df_TF, ta_settings, main_settings, log
             return False
 
     if check_vwap:
+        count.append(True)
         vwap_threshold = ta_settings["VWAP"]['parsed_value']
         vwap_look_back = int(ta_settings['VWAP']['other_columns']['Lookback'])
         if vwap_look_back >= len(df_TF):
@@ -69,6 +73,7 @@ def check_technical_confluence(timeframe, df_TF, ta_settings, main_settings, log
             return False
 
     if check_ema:
+        count.append(True)
         ema_settings = ta_settings["EMA"]['parsed_value']
         ema_max_look_back = max(ema_settings)
         if ema_max_look_back >= len(df_TF):
@@ -84,6 +89,7 @@ def check_technical_confluence(timeframe, df_TF, ta_settings, main_settings, log
             return False
 
     if check_adx:
+        count.append(True)
         adx_look_back = int(ta_settings["ADX"]['other_columns']['Lookback'])
         adx_threshold = float(ta_settings["ADX"]['value'])
         if adx_look_back >= len(df_TF):
@@ -97,6 +103,7 @@ def check_technical_confluence(timeframe, df_TF, ta_settings, main_settings, log
             return False
 
     if check_atr:
+        count.append(True)
         atr_settings = ta_settings["ATR"]['parsed_value']
         atr_max_look_back = max(atr_settings)
         if atr_max_look_back >= len(df_TF):
@@ -112,6 +119,7 @@ def check_technical_confluence(timeframe, df_TF, ta_settings, main_settings, log
             return False
 
     if check_obv:
+        count.append(True)
         obv_settings = int(ta_settings["OBV"]['parsed_value'])
         if len(df_TF) < 6:
             logger.warning(f"🚫 OBV requires minimum 6 rows, got {len(df_TF)} ❌")
@@ -122,6 +130,7 @@ def check_technical_confluence(timeframe, df_TF, ta_settings, main_settings, log
         if not obv_rising:
             logger.info(f"⚠️ OBV not rising over last {obv_settings} periods, skipping signal ❌")
             return False
-    
+    if len(count) > 0:
+        pass
     logger.info("✅📈 All TA conditions are met...")
     return True

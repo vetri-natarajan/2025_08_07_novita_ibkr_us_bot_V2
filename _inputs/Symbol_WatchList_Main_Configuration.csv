@@ -1,3 +1,2 @@
-Symbol,Hi to Lo TF,HHLL,Entry Decision,Mode,Total Gain,Each Gain,Volatility,Volume Confirm,Max Draw down,Exit,SL,TP
-RELIANCE,"1W,1D,1m",1,breakout,Swing,~0.01% ? 0.99%,~0.01%/ 0.99%,~0.01%/ 0.99%,H,10%,E1,1,2
-RELIANCE,"30m,5m,1m",1,breakout,Scalping,~0.01% ? 0.99%,~0.01%/ 0.99%,~0.01%/ 0.99%,H,10%,E1,1,2
+Symbol,Hi to Lo TF,HHLL,Skip HTF,Skip MTF,Skip LTF,Entry Decision,Mode,Total Gain,Each Gain,Volatility,Volume Confirm,Max Draw down,Exit,SL,TP
+RELIANCE,"30m,5m,1m",3,y,y,n,breakout,Scalping,~0.01% ? 0.99%,~0.01%/ 0.99%,~0.01%/ 0.99%,H,10%,E1,1,2

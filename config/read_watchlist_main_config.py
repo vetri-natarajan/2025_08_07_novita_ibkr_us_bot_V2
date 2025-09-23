@@ -136,7 +136,7 @@ def read_watchlist_main_config(file_path, logger):
         v["Parsed Each Gain"] = parsed_each_gains   
 
         parsed_each_vol = parse_each_vol(v.get("Volatility"))
-        v["Parsed Each Volatility"] = parsed_each_vol         
+        v["Parsed Each Volatility"] = parsed_each_vol     
        # parsed_gains = parse_total_gains(v.get)
         #logger.info("v after")
         #logger.info(v)

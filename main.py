@@ -17,7 +17,7 @@ from utils.pre_market_checks import pre_market_checks
 from reports.trade_reporter import trade_reporter_class
 from execution.order_manager import order_manager_class
 from data.vix_spx import get_vix
-from strategies.strategy import check_HTF_conditions, check_MTF_conditions, check_LTF_conditions
+from strategies.strategy import check_HTF_conditions, check_MTF_conditions, check_LTF_conditions, check_TA_confluence
 from execution.position_sizer import compute_qty
 from indicators.atr import calculate_atr
 from risk_management.atr_based_sl_tp import compute_atr_sl_tp
@@ -119,6 +119,7 @@ async def run_backtest_entrypoint(ib, account_value, ib_connector):
     )
     backtester = BacktestEngine(
         ib,
+        ALWAYS_TFS,
         symbol_list,
         account_value,
         fetcher,
@@ -153,16 +154,21 @@ async def process_trading_signals_cached(symbol_combined, symbol, timeframe, df_
             logger.info(f"⏸️ MTF conditions not met for {symbol_combined}")
             return False
         live_price = None
-        ticker = streaming_data.tickers.get(symbol_combined)
+        ticker = streaming_data.tickers.get(symbol)
         if ticker is not None: 
             live_price = ticker.last
         is_live = True
+        
         okLTF = check_LTF_conditions(symbol_combined, symbol, watchlist_main_settings, ta_settings, max_look_back, df_LTF, df_HTF, logger, order_testing, is_live, live_price)
         if not okLTF:
             logger.info(f"⏸️ LTF conditions not met for {symbol_combined}")
             return False
-       
+        data_cache_symbol = streaming_data._data_cache[symbol]
+        okTA = check_TA_confluence(symbol, ALWAYS_TFS, ta_settings, data_cache_symbol, watchlist_main_settings, logger)
         
+        if not okTA:
+            logger.info(f"⏸️ TA confluence conditions not met for {symbol_combined}")
+            return False            
         
         ticker = streaming_data.tickers.get(symbol)
         last_price = None
@@ -246,18 +252,28 @@ async def process_trading_signals_cached(symbol_combined, symbol, timeframe, df_
 
 async def on_bar_handler(symbol, timeframe, df, symbol_combined, streaming_data, ta_settings, mode, max_look_back, order_manager, cfg, account_value, vix, logger):
     HTF, MTF, LTF = watchlist_main_settings[symbol_combined]['Parsed TF']
+    skip_HTF = watchlist_main_settings[symbol_combined]['Skip HTF'].strip().upper() in ['Y', 'YES', 'TRUE', '1' ]
+    skip_MTF = watchlist_main_settings[symbol_combined]['Skip MTF'].strip().upper() in ['Y', 'YES', 'TRUE', '1' ]
+    skip_LTF = watchlist_main_settings[symbol_combined]['Skip LTF'].strip().upper() in ['Y', 'YES', 'TRUE', '1' ]
     
-    logger.info(f"TA settings loaded for {symbol}")
-    if timeframe == HTF:
-        if not order_testing:
-            htf_signals[symbol_combined] = check_HTF_conditions(symbol_combined, symbol, watchlist_main_settings, ta_settings, max_look_back, df, logger)
-        else:
-            htf_signals[symbol_combined] = True
-            
-        signal = htf_signals[symbol_combined]
+    #logger.info(f"TA settings loaded for {symbol}")
+    
+           
+    if timeframe == HTF:    
+        if not skip_HTF:         
+            if not order_testing:
+                htf_signals[symbol_combined] = check_HTF_conditions(symbol_combined, symbol, watchlist_main_settings, ta_settings, max_look_back, df, logger)
+            else:
+                htf_signals[symbol_combined] = True                
+
+        else:        
+            htf_signals[symbol_combined] = True            
+            logger.info("⏭️🕰️ Skip HTF enabled — skipping {HTF} checksfor [{symbol_combined}] ✅")
+        
+        signal_htf = htf_signals[symbol_combined]
         
         
-        if signal:
+        if signal_htf:
             await streaming_data.subscribe_live_ticks(symbol)
             logger.info(f"🔔 Live tick subscribed for {symbol} on HTF signal")      
         '''
@@ -267,32 +283,51 @@ async def on_bar_handler(symbol, timeframe, df, symbol_combined, streaming_data,
         '''
 
             
-        emoji = "✅" if signal else "❌"
-        logger.info(f"{emoji} HTF({HTF}) signal updated for {symbol_combined}: {signal}")
-    elif timeframe == MTF:
-        if not order_testing:
-            mtf_signals[symbol_combined] = check_MTF_conditions(symbol_combined, symbol, watchlist_main_settings, ta_settings, max_look_back, df, logger)
+        emoji = "✅" if signal_htf else "❌"
+        logger.info(f"{emoji} HTF({HTF}) signal updated for {symbol_combined}: {signal_htf}")
         
-        else:
-            mtf_signals[symbol_combined] = True
+    elif timeframe == MTF:
+        if not skip_MTF:
+            if not order_testing:
+                mtf_signals[symbol_combined] = check_MTF_conditions(symbol_combined, symbol, watchlist_main_settings, ta_settings, max_look_back, df, logger)
             
-        signal = mtf_signals[symbol_combined]
-        emoji = "✅" if signal else "❌"
-        logger.info(f"{emoji} MTF({MTF}) signal updated for {symbol_combined}: {signal}")
+            else:
+                mtf_signals[symbol_combined] = True
+                
+            signal_mtf = mtf_signals[symbol_combined]
+            emoji = "✅" if signal_mtf else "❌"
+            logger.info(f"{emoji} MTF({MTF}) signal updated for {symbol_combined}: {signal_mtf}")
+        
+        else: 
+            mtf_signals[symbol_combined] = True
+            logger.info("⏭️🕰️ Skip MTF enabled — skipping {MTF} checksfor [{symbol_combined}] ✅")
+            
     elif timeframe == LTF:
-        df_HTF = streaming_data.get_latest(symbol, HTF)
-        df_MTF = streaming_data.get_latest(symbol, MTF)
-        df_LTF = df
-        if df_HTF is None or df_MTF is None or df_LTF is None:
-            logger.info(f"⏳ Data not ready for {symbol_combined}")
-            return
-        await process_trading_signals_cached(symbol_combined, symbol, timeframe, df_HTF, df_MTF, df_LTF, streaming_data,
-                                            order_manager, cfg, account_value, percent_of_account_value, vix,
-                                            logger, watchlist_main_settings, ta_settings,
-                                            max_look_back, trading_units=cfg["trading_units"],
-                                            vix_threshold=cfg["vix_threshold"],
-                                            vix_reduction_factor=cfg["vix_reduction_factor"],
-                                            skip_on_high_vix=cfg["skip_on_high_vix"])
+        if not skip_LTF:
+            df_HTF = streaming_data.get_latest(symbol, HTF)
+            df_MTF = streaming_data.get_latest(symbol, MTF)
+            df_LTF = df
+            
+            if df_HTF is None and not skip_HTF: 
+                logger.info(f"⏳ HTF data not ready for {symbol_combined}")
+                return
+
+            if df_MTF is None and not skip_MTF: 
+                logger.info(f"⏳ MTF data not ready for {symbol_combined}")
+                return
+
+            if df_LTF is None and not skip_LTF: 
+                logger.info(f"⏳ LTF data not ready for {symbol_combined}")
+                return            
+            await process_trading_signals_cached(symbol_combined, symbol, timeframe, df_HTF, df_MTF, df_LTF, streaming_data,
+                                                order_manager, cfg, account_value, percent_of_account_value, vix,
+                                                logger, watchlist_main_settings, ta_settings,
+                                                max_look_back, trading_units=cfg["trading_units"],
+                                                vix_threshold=cfg["vix_threshold"],
+                                                vix_reduction_factor=cfg["vix_reduction_factor"],
+                                                skip_on_high_vix=cfg["skip_on_high_vix"])
+        else:
+            logger.info("⏭️🕰️ Skip LTF enabled — skipping {LTF} checksfor [{symbol_combined}] ✅")
         
 async def poll_partial_bars(streaming_data: StreamingData, symbol: str, timeframe: str):
     while True:
@@ -347,7 +382,7 @@ async def run_live_mode(ib_connector):
             if not subscribed:
                 logger.warning(f"Subscription failed for {symbol} {tf}")
                 continue
-    '''
+    
     for symbol_combined in symbol_list:
         symbol, mode = symbol_combined.split('_')
         logger.info(f"📌 symbol: {symbol}    ⚙️ mode: {mode}")
@@ -389,8 +424,6 @@ async def run_live_mode(ib_connector):
                 asyncio.create_task(on_bar_handler_wrapper(symbol, tf, seeded_df))
             else:
                 logger.warning(f"⚠️ No seeded historical data to trigger initial callback for {symbol} [{tf}]")
-
-    '''   
 
 
 

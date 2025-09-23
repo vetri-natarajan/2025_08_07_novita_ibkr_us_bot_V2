@@ -76,9 +76,46 @@ def check_LTF_conditions(symbol_combined, symbol, main_settings, ta_settings, ma
     return True
 
 
-def check_technical_confluence(timeframe, df_TF, ta_settings, main_settings, logger) -> bool:
-    pass
-
-def check_TA_confluence(ALWAYS_TFS, timeframe, df_TF, ta_settings, main_settings, logger):
+def check_TA_confluence(symbol, ALWAYS_TFS, data_cache, ta_settings, main_settings, logger):
+    '''
+    1. we need to use the check_technicla_Confluence module
+    2 pass timeframe anddfs
+    3. for time frames take from ta_setttings
+    4 get the df_TF form steremin data
     
-    pass
+    '''
+    TF_TO_TIMEFRAME = {
+        '1 week': '1W',
+        '1 day': '1D',
+        '4 hours': '4H',
+        '1 hour': '1H',
+        '30 mins': '30m',
+        '15 mins': '15m',
+        '5 mins': '5m',
+        '1 min': '1m'
+        
+        }
+    
+    for timeframe in ALWAYS_TFS:
+        #get the dfs
+        timeframe_ = TF_TO_TIMEFRAME[timeframe]
+        df_TFs = data_cache.get(symbol)
+        df_TF = df_TFs[timeframe][:-1]
+       
+        if not check_technical_confluence(timeframe_, df_TF, ta_settings, main_settings, logger):
+            logger.info(f"⚠️❌ TA Confluence [{symbol}] {timeframe} confluence not met")
+            import time
+            #time.sleep(15)
+                
+            return False  
+        
+        else: 
+            import time
+            #time.sleep(15)
+            #if len(count) > 0:
+            logger.info(f"✅ TA Confluence [{symbol}] {timeframe} confluence met")
+    
+
+        
+    
+    return True

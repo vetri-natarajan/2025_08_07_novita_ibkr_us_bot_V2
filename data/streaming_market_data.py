@@ -441,7 +441,9 @@ class StreamingData:
             if partial:
                 await self._update_cache_and_callbacks(symbol, target_tf, partial, callback=False)
 
+    
     async def _update_cache_and_callbacks(self, symbol: str, timeframe: str, agg_bar: AggregatedBar, callback=True):
+        # Prepare the row dictionary
         row = {
             'open': float(agg_bar.open_),
             'high': float(agg_bar.high),
@@ -449,47 +451,66 @@ class StreamingData:
             'close': float(agg_bar.close),
             'volume': float(agg_bar.volume)
         }
-
+    
         df = self._data_cache.get(symbol, {}).get(timeframe)
         if df is None or df.empty:
             df = pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
-
+    
         idx_time = agg_bar.time
-
-        # Ensure tz-aware and consistent index timezone (UTC here)
+    
+        # Ensure idx_time is tz-aware and consistent with self.time_zone
         if isinstance(idx_time, pd.Timestamp):
             idx_time = idx_time.to_pydatetime()
         if getattr(idx_time, "tzinfo", None) is None:
-            idx_time = pytz.UTC.localize(idx_time)
-
+            idx_time = pytz.timezone(self.time_zone).localize(idx_time)
+        else:
+            idx_time = idx_time.astimezone(pytz.timezone(self.time_zone))
+    
         df_new = pd.DataFrame([row], index=[idx_time])
-
+    
+        # Normalize entire index to tz-aware self.time_zone before any index operations
+        if not df.empty:
+            df.index = pd.to_datetime(df.index)
+            if df.index.tz is None:
+                df.index = df.index.tz_localize(self.time_zone)
+            else:
+                df.index = df.index.tz_convert(self.time_zone)
+    
         if not df.empty and idx_time == df.index[-1]:
-            # Update in-place last row
             df.iloc[-1] = row
         else:
             if idx_time in df.index:
                 self.logger.warning(f"Duplicate timestamp {idx_time} found, replacing existing row")
                 df.loc[idx_time] = row
             else:
-                df = pd.concat([df, df_new])
+                dfs = [df, df_new]
+                #Exclude empty dfs
+                dfs = [d for d in dfs if not d.empty]
+                #removing na columns
+                dfs = [df.dropna(axis=1, how='all') for df in dfs]
+                df = pd.concat(dfs)
                 df = df.sort_index()
-
+    
         if len(df) > self.buffer_limit:
-            self.logger.info(f"✂️ Truncating live data to last {self.buffer_limit} bars for {symbol} [{timeframe}]")
+            self.logger.info(
+                f"✂️ Truncating live data to last {self.buffer_limit} bars for {symbol} [{timeframe}]"
+            )
             df = df.tail(self.buffer_limit)
-
+    
+        if symbol not in self._data_cache:
+            self._data_cache[symbol] = {}
         self._data_cache[symbol][timeframe] = df
-
-        # Optional visibility on select TFs
+    
+        # Optional: log last 5 rows for selected timeframes
         '''
         if timeframe in ['1 min', '5 mins', '30 mins']:
             cols = ["open", "high", "low", "close", "volume"]
             self.logger.info(f"📊 Last 5 rows for {symbol} [{timeframe}]:\n{df[cols].tail(5)}")
         '''
-
+    
         if callback and timeframe != '5 secs':
             await self._fire_callbacks(symbol, timeframe, df)
+
             
     def _print_last_rows_on_1min_complete(self, symbol: str):
         """
