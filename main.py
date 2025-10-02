@@ -42,8 +42,7 @@ currency = config_dict["currency"]
 log_directory = config_dict["log_directory"]
 read_restart = config_dict["read_restart"]
 auto_restart = config_dict["auto_restart"]
-ibkr_host = config_dict["auto_restart"]  # verify this config for typo
-ibkr_port = config_dict["ibkr_port"]
+tws_or_gateway = config_dict["tws_or_gateway"]
 ibkr_client_id = config_dict["ibkr_client_id"]
 account_type = config_dict["account_type"]
 run_mode = config_dict["run_mode"]
@@ -438,7 +437,7 @@ async def run_live_mode(ib_connector):
 
 
 async def main():
-    ib_connector = ibkr_connector(account_type, ib, ibkr_client_id, logger)
+    ib_connector = ibkr_connector(tws_or_gateway, account_type, ib, ibkr_client_id, logger)
     asyncio.create_task(ib_connector.connect())
 
     await ib_connector.ensure_connected()

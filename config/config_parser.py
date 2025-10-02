@@ -40,10 +40,9 @@ def get_config_inputs():
         
 
         # --- IBKR ---
-        ibkr_host = conf["IBKR"]["host"]
-        ibkr_port = int(conf["IBKR"]["port"])
-        ibkr_client_id = int(conf["IBKR"]["client_id"])
-        account_type = conf["IBKR"]["live_or_paper"].upper()
+        tws_or_gateway = conf["IBKR"]["tws_or_gateway"].strip().upper()
+        ibkr_client_id = int(conf["IBKR"]["client_id"].strip())
+        account_type = conf["IBKR"]["live_or_paper"].strip().upper()
 
 
         # --- TRADING ---
@@ -93,8 +92,7 @@ def get_config_inputs():
             "log_directory": log_directory,
             "read_restart": read_restart,
             "auto_restart": auto_restart,
-            "ibkr_host": ibkr_host,
-            "ibkr_port": ibkr_port,
+            "tws_or_gateway": tws_or_gateway, 
             "ibkr_client_id": ibkr_client_id,
             "account_type": account_type,
             "vix_symbol": vix_symbol,

@@ -125,7 +125,7 @@ def check_technical_confluence(timeframe, df_TF, ta_settings, main_settings, log
             logger.warning(f"🚫 OBV requires minimum 6 rows, got {len(df_TF)} ❌")
             return False
         obv = calculate_obv(df_TF)
-        obv_rising = ((obv.iloc[-1] - obv.iloc[-obv_settings-1]) / 5) > 0
+        obv_rising = ((obv.iloc[-1] - obv.iloc[-obv_settings-1]) / obv_settings) > 0
         logger.info(f"📈 OBV rising: {obv_rising}")
         if not obv_rising:
             logger.info(f"⚠️ OBV not rising over last {obv_settings} periods, skipping signal ❌")

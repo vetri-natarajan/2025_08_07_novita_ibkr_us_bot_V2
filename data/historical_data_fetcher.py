@@ -165,7 +165,7 @@ class HistoricalDataFetcher:
 
         return df
 
-    async def fetch_multiple_timeframes(self, symbol_combined, symbol, ALWAYS_TFS, start_time, end_time, save=False, load=False):
+    async def fetch_multiple_timeframes(self, symbol_combined, symbol, ALWAYS_TFS, start_time, end_time, save=True, load=True):
         self.logger.info("\n\n\nin fetch_multiple_timeframes===>")
         self.logger.info(f"symbol_combined ===> {symbol_combined}")
         self.logger.info(f"start_time ===> {start_time}")
