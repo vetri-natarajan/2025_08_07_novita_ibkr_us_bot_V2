@@ -590,6 +590,8 @@ class BacktestEngine:
                     if symbol_combined in self.positions and self.positions[symbol_combined]['qty'] > 0:
                         
                         current_price = float(df_LTF_slice['close'].iloc[-1])
+                        current_low = float(df_LTF_slice['low'].iloc[-1])
+                        current_high = float(df_LTF_slice['high'].iloc[-1])
                         entry_price = self.positions[symbol_combined]['entry_price']
                         entry_time = self.positions[symbol_combined]['entry_time']
                         side = self.positions[symbol_combined]['side'].upper()
@@ -608,20 +610,20 @@ class BacktestEngine:
                             sl_price = res['stop_loss']
                             if sl_price > self.positions[symbol_combined]['sl_price']:
                                 self.positions[symbol_combined]['sl_price'] = sl_price
-                            if res['sl_triggered']:
+                            if current_low <= sl_price:
                                 self.logger.info(f"🛑 SL triggered — Stoploss {sl_price}")
                                 self.exit_trade(symbol_combined, symbol, sl_price, current_time_utc)
                                 continue
-                            if res['take_70_profit'] and not record.get("profit_taken", False):
+                            if current_high >= res["target_70"] and not record.get("profit_taken", False):
                                 qty_to_exit = int(record["qty"] * 0.7)
                                 if qty_to_exit > 0:
                                     self.logger.info(f"🎯 Partial Exit — 9% First target reached | Target: {res['target_70']}")
-                                    self.exit_trade_partial(symbol_combined, symbol, current_price, current_time_utc, qty_to_exit)
+                                    self.exit_trade_partial(symbol_combined, symbol, res["target_70"], current_time_utc, qty_to_exit)
                                     self.positions[symbol_combined]["profit_taken"] = True
-                            if res['exit_remaining']:
+                            if current_high >= res["target_30"]:
                                 if self.positions[symbol_combined]['qty'] > 0:
                                     self.logger.info(f"🎯 Partial Exit — 12% Second target reached | Target: {res['target_30']}")
-                                    self.exit_trade(symbol_combined, symbol, current_price, current_time_utc)
+                                    self.exit_trade(symbol_combined, symbol, res["target_30"], current_time_utc)
                                     continue
     
                         elif exit_method == "E4":
@@ -632,17 +634,25 @@ class BacktestEngine:
                             sl_price = res['stop_loss']
                             tp_price = res['tp_price']
                             
+                            self.logger.info(f"🧮 Calculating dynamic stop loss — 📊 VWAP: {vwap} | 🛑 SL: {sl_price} | 🎯 TP: {tp_price}")
+
+                            
                             if sl_price > self.positions[symbol_combined]['sl_price']:
                                 self.positions[symbol_combined]['sl_price'] = sl_price
-                            if res['sl_triggered'] or res['take_profit'] or res['auto_close']:
+                            
+                            sl_reached = current_low <= sl_price
+                            tp_reached = current_high >= tp_price
+                            auto_close_reached = res['auto_close']
+                            
+                            if sl_reached or tp_reached or auto_close_reached:
                                 exit_price = None
-                                if res['sl_triggered']:
+                                if sl_reached:
                                     self.logger.info(f"🛑 SL triggered — Stoploss {sl_price}")
                                     exit_price = sl_price
-                                elif res['take_profit']: 
+                                elif tp_reached: 
                                     self.logger.info(f"🎯 Target reached | Target: {tp_price}")
                                     exit_price = tp_price
-                                elif res['auto_close']: 
+                                elif auto_close_reached: 
                                     self.logger.info(f"🚨 Max holding period reached — Closing at {current_price}")
                                     exit_price = current_price
                                     
@@ -667,11 +677,11 @@ class BacktestEngine:
                             tp_price = self.positions[symbol_combined]['tp_price']
                             if side == "BUY":
                                 exit_price = None
-                                if current_price <= sl_price or current_price >= tp_price:
-                                    if current_price <= sl_price:
+                                if current_low <= sl_price or current_high >= tp_price:
+                                    if current_low <= sl_price:
                                         self.logger.info(f"🛑 SL triggered — Stoploss {sl_price}")
                                         exit_price = sl_price
-                                    elif current_price >= tp_price: 
+                                    elif current_high >= tp_price: 
                                         self.logger.info(f"🎯 Target reached | Target: {tp_price}")
                                         exit_price = tp_price                          
                                     self.exit_trade(symbol_combined, symbol, exit_price, current_time_utc)
