@@ -49,7 +49,7 @@ def get_config_inputs():
         run_mode = conf["TRADING"]["run_mode"].upper()
         backtest_duration = int(conf["TRADING"]["backtest_duration"])
         backtest_duration_units = conf["TRADING"]["backtest_duration_units"]
-        
+        backtest_commission_slippage_percent = float(conf["TRADING"]["backtest_commission_slippage_percent"])
         trading_time_zone = conf["TRADING"]["time_zone"]
         trading_windows = parse_list(conf["TRADING"]["trading_windows"])
         trading_capital = float(conf["TRADING"]["capital"])
@@ -100,6 +100,7 @@ def get_config_inputs():
             "run_mode": run_mode, 
             "backtest_duration": backtest_duration,
             "backtest_duration_units": backtest_duration_units, 
+            "backtest_commission_slippage_percent": backtest_commission_slippage_percent,
             "trading_time_zone": trading_time_zone,
             "trading_windows": trading_windows,
             "trading_capital": trading_capital,

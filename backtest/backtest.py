@@ -95,12 +95,12 @@ class BacktestEngine:
         self.ib = ib
         self.ALWAYS_TFS = ALWAYS_TFS
         self.watchlist = watchlist
-        self.account_value = float(account_value)
-        self.commission = float(commission)
+        self.account_value = float(account_value)        
         self.positions = {}
         self.trades = []
         self.data_fetcher = data_fetcher
         self.config_dict = config_dict
+        self.commission = self.config_dict["backtest_commission_slippage_percent"]/100
         self.intraday_scalping_exit_time = config_dict["intraday_scalping_exit_time"]
         self.order_testing = self.config_dict['order_testing']
         self.percent_of_account_value = float(self.config_dict['percent_of_account_value'])  # e.g., 0.1 for 10%
@@ -462,14 +462,14 @@ class BacktestEngine:
                         df_MTF_slice = meta['df_MTF'].loc[:current_time_local]                     
 
                         '''
-                        self.logger.info(f"📝 head HTF slice===> \n{df_HTF_slice.head(20)} ")
-                        self.logger.info(f"📝 tail HTF slice===> \n{df_HTF_slice.tail(20)} ")
-                        self.logger.info(f"📝 head MTF slice===> \n{df_MTF_slice.head(20)} ")
-                        self.logger.info(f"📝 tail MTF slice ===> \n{df_MTF_slice.tail(20)} ")     
-                        self.logger.info(f"📝 head LTF slice===> \n{df_LTF_slice.head(20)} ")
+                        self.logger.info(f"📝 head HTF slice===> \n{df_HTF_slice.head(5)} ")
+                        self.logger.info(f"📝 tail HTF slice===> \n{df_HTF_slice.tail(5)} ")
+                        self.logger.info(f"📝 head MTF slice===> \n{df_MTF_slice.head(5)} ")
+                        self.logger.info(f"📝 tail MTF slice ===> \n{df_MTF_slice.tail(5)} ")     
+                        self.logger.info(f"📝 head LTF slice===> \n{df_LTF_slice.head(5)} ")
                         '''              
                         
-                        self.logger.info(f"📝 tail LTF slice===> \n{df_LTF_slice[['high', 'low', 'close']].tail(10)} ")                    
+                        self.logger.info(f"📝 tail LTF slice===> \n{df_LTF_slice[['open', 'high', 'low', 'close']].tail(5)} ")                    
                         
                         if df_HTF_slice.empty or df_MTF_slice.empty:
                             continue
@@ -581,7 +581,7 @@ class BacktestEngine:
 
                         df_LTF_slice = df_LTF.loc[:current_time_local]
                         self.logger.info(
-                                        f"📝 Tail LTF slice (H, L, C) ===> \n{df_LTF_slice[['high', 'low', 'close']].tail(10)}"
+                                        f"📝 Tail LTF slice (H, L, C) ===> \n{df_LTF_slice[['open', 'high', 'low', 'close']].tail(5)}"
                                         )
                         pass
                     
@@ -602,8 +602,9 @@ class BacktestEngine:
                         exit_method = meta['exit_method']
                         mode = meta['mode']
                         self.logger.info(
-                                        f"Already in trade... ⏰ {current_time_utc} ===> [{symbol_combined}] 🚪 Exit method: {exit_method}"
-                                        )
+                            f"📌 Already in trade... ⏰ {current_time_utc} ===> [{symbol_combined}] 💰 Entry: {entry_price} | 🕒 Time: {entry_time} | 🚪 Exit method: {exit_method}"
+                        )
+
 
                         if exit_method == "E3":
                             res = compute_dynamic_sl_swing(entry_price, current_price, record)
