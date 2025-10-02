@@ -476,7 +476,7 @@ class BacktestEngine:
                         data_cache_slice = deepcopy(data_cache)
 
                         #data cache/slices for all technical indicators...above are only for HTF, MTF and LTF timeframes
-                        for symbol_combined, df_dict in data_cache_slice.items():
+                        for symbol_temp, df_dict in data_cache_slice.items():
                             
                             #self.logger.info(f"symbol_combined data_cache ===> {symbol_combined}")
                             #self.logger.info(f"df_dict data_cache===> {df_dict}")
@@ -528,8 +528,16 @@ class BacktestEngine:
                         if not okLTF or skip_LTF:
                             self.logger.info("LTF not okay... continuing") 
                             continue
+                        
+                        if mode == 'scalping': # in scalping mode don't enter after the exit time
+                            exit_hour, exit_min = self.intraday_scalping_exit_time.split(':')
+                            exit_time = dt.time(int(exit_hour), int(exit_min))  
+                            self.logger.info(f"⏱️ Trade time check — Now: {current_time_local.time()} | Exit scheduled: {exit_time}")
+                            if current_time_local.time() >= exit_time:
+                                continue
                         sig = check_TA_confluence(symbol_combined, self.ALWAYS_TFS, data_cache_slice, ta_settings, watchlist_main_settings, self.logger)
 
+                        
                         # Entry
                         if sig and (symbol_combined not in self.positions or self.positions[symbol_combined]['qty'] == 0):
                             
