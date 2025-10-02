@@ -40,6 +40,8 @@ def compute_dynamic_sl_swing(entry_price, current_price, record):
     return {
         "stop_loss": stop_loss,
         "sl_triggered": sl_triggered,
+        "target_70": tp2,
+        "target_30": tp3,
         "take_70_profit": take_70_profit,
         "exit_remaining": exit_remaining,
         "updated_qty": updated_qty

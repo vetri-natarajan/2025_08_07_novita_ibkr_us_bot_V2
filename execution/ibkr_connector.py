@@ -53,14 +53,11 @@ class ibkr_connector:
                     self._async_connected.clear()
                     
                     if self.account_type.upper() == "PAPER":
-                        self.logger.info("insdie paper")
                         if self.tws_or_gateway == "TWS":
-                            self.logger.info("insdie tws")
                             self.port_id = 7497
                         if self.tws_or_gateway == "GATEWAY":
                             self.port_id = 4002        
-                        else: 
-                            self.logger.info("pimpilaka pi....")
+   
                     elif self.account_type.upper() == "LIVE":
                         if self.tws_or_gateway == "TWS":
                             self.port_id = 7496
