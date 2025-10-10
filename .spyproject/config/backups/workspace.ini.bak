@@ -4,7 +4,7 @@ save_data_on_exit = True
 save_history = True
 save_non_project_files = False
 project_type = 'empty-project-type'
-recent_files = ['issues.txt', '_inputs\\inputs.cfg', 'main.py', 'backtest\\backtest.py', 'strategies\\strategy.py', 'logic\\helper_modules\\ta_confluence.py', 'data\\historical_data_fetcher.py', 'data\\streaming_market_data.py']
+recent_files = ['issues.txt', '_inputs\\inputs.cfg', 'main.py', 'data\\historical_data_fetcher.py', 'data\\streaming_market_data.py', 'logic\\volatility_filter.py', 'logic\\helper_modules\\volatility_candle_filter.py', 'data\\vix_spx.py']
 
 [main]
 version = 0.2.0

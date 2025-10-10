@@ -184,7 +184,7 @@ async def process_trading_signals_cached(symbol_combined, symbol, timeframe, df_
                 last_price = 1382
             elif symbol == "RELIANCE":
                 last_price = 822
-        qty = compute_qty(account_value, percent_of_account_value, trading_units, last_price, vix, vix_threshold, vix_reduction_factor, skip_on_high_vix)
+        qty = compute_qty(account_value, percent_of_account_value, trading_units, last_price, vix, logger, vix_threshold, vix_reduction_factor, skip_on_high_vix)
 
             
         if qty <= 0:

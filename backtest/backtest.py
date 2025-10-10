@@ -108,6 +108,9 @@ class BacktestEngine:
         self.watchlist_main_settings = watchlist_main_settings
         self.logger = logger
         self.backtest_file_handler = None
+        self.total_trades = 0
+        self.net_pnl = 0
+        self.floating_equity = 0
 
         # Equity tracking for percent-of-equity sizing
         self.starting_equity = float(account_value)
@@ -137,7 +140,7 @@ class BacktestEngine:
         alloc = account_value * percent_of_account_value
         qty = floor(alloc / price)
         """
-        alloc = max(self.account_value * self.percent_of_account_value, 0.0)
+        alloc = max(self.floating_equity * self.percent_of_account_value, 0.0)
         if price <= 0:
             return 0
         qty = int(alloc // price)
@@ -525,8 +528,8 @@ class BacktestEngine:
                             okLTF = True
                             self.logger.info(f"⏭️🕰️ Skip LTF enabled — skipping {timeframes[2]} checks for [{symbol_combined}] ✅")          
                             
-                        if not okLTF or skip_LTF:
-                            self.logger.info("LTF not okay... continuing") 
+                        if not skip_LTF and not okLTF:
+                            self.logger.info("⚠️ LTF cheks not okay... continuing")
                             continue
                         
                         if mode == 'scalping': # in scalping mode don't enter after the exit time
@@ -535,6 +538,7 @@ class BacktestEngine:
                             self.logger.info(f"⏱️ Trade time check — Now: {current_time_local.time()} | Exit scheduled: {exit_time}")
                             if current_time_local.time() >= exit_time:
                                 continue
+                            
                         sig = check_TA_confluence(symbol_combined, self.ALWAYS_TFS, data_cache_slice, ta_settings, watchlist_main_settings, self.logger)
 
                         
@@ -543,19 +547,20 @@ class BacktestEngine:
                             
                             last_price = float(df_LTF_slice['close'].iloc[-1])
         
-                            qty_equity = self.compute_qty(last_price)
+                            #qty_equity = self.compute_qty(last_price)
                             vix = self.premarket.get_close_price(self.premarket.vix_df, current_time_local.date())
-                            qty_vix = external_compute_qty(
+                            qty = external_compute_qty(
                                 self.account_value,
                                 self.percent_of_account_value,
                                 units=int(self.config_dict.get("trading_units", 5)),
                                 price=last_price,
                                 vix=vix,
+                                logger = self.logger,
                                 vix_threshold=float(self.config_dict.get("vix_threshold", 20)),
                                 vix_reduction_factor=float(self.config_dict.get("vix_reduction_factor", 1)),
                                 skip_on_high_vix=bool(self.config_dict.get("skip_on_high_vix", False)),
                             )
-                            qty = max(min(qty_equity, qty_vix), 0)
+                            #qty = max(min(qty_equity, qty_vix), 0)
                             if qty <= 0:
                                 continue
         
@@ -567,6 +572,7 @@ class BacktestEngine:
                             last_price = float(df_LTF_slice['close'].iloc[-1])
                             if exit_method == "E1":
                                 sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_pct=sl_in, tp_pct=tp_in)
+                                self.logger.info(f"🚀 E1 Fixed Stop Calculated | SL: {sl_price}, TP: {tp_price}")
                             elif exit_method == "E2":
                                 try:
                                     atr_val = float(calculate_atr(df_LTF_slice, 5).iloc[-1])
@@ -574,10 +580,14 @@ class BacktestEngine:
                                     atr_val = None
                                 if atr_val is not None:
                                     sl_price, tp_price = compute_atr_sl_tp(last_price, atr_val, k_sl=sl_in, k_tp=tp_in)
+                                    self.logger.info(f"🚀 E2 ATR Stop Calculated | ATR: {atr_val}, SL: {sl_price}, TP: {tp_price}")
+
                                 else:
                                     sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_pct=sl_in, tp_pct=tp_in)
+                                    self.logger.info(f"🚀 Default E1 Fixed Stop Calculated | SL: {sl_price}, TP: {tp_price}")
                             elif exit_method in ['E3', 'E4']:
                                 sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_pct=2, tp_pct=4)
+                                self.logger.info(f"🚀 Initial E1 Fixed Stop Calculated for E3/E4 | SL: {sl_price}, TP: {tp_price}")
                             else:
                                 sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_pct=sl_in, tp_pct=tp_in)
         
@@ -635,7 +645,7 @@ class BacktestEngine:
                                     self.exit_trade(symbol_combined, symbol, res["target_30"], current_time_utc)
                                     continue
     
-                        elif exit_method == "E4":
+                        if exit_method == "E4":
                             vwap_series = calculate_vwap(df_LTF_slice)
                             vwap = vwap_series.iloc[-1] if not vwap_series.empty else None
                             res = compute_hedge_exit_trade(entry_price, current_price, vwap, entry_time, current_time_utc)
@@ -668,7 +678,7 @@ class BacktestEngine:
                                 self.exit_trade(symbol_combined, symbol, exit_price, current_time_utc)
                                 continue
     
-                        elif mode == 'scalping':
+                        if mode == 'scalping':
                             exit_hour, exit_min = self.intraday_scalping_exit_time.split(':')
                             exit_time = dt.time(int(exit_hour), int(exit_min))  
                             self.logger.info(f"⏱️ Trade time check — Now: {current_time_local.time()} | Exit scheduled: {exit_time}")
@@ -681,7 +691,7 @@ class BacktestEngine:
                             else:
                                 self.logger.info("⏱️ Time exit condition not satisfied")                                
     
-                        else:  # E1/E2 fixed/ATR
+                        if exit_method in ["E1", "E2"]:  # E1/E2 fixed/ATR
                             sl_price = self.positions[symbol_combined]['sl_price']
                             tp_price = self.positions[symbol_combined]['tp_price']
                             if side == "BUY":

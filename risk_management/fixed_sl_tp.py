@@ -7,4 +7,6 @@ Purpose:
 def compute_fixed_sl_tp(price: float, sl_pct: float = 2, tp_pct: float = 4):
     sl = round(price * (1 - (sl_pct*0.01)))
     tp = round(price * (1 +  (tp_pct*0.01)))
+    #sl = price * (1 - (sl_pct*0.01))    
+    #tp = price * (1 +  (tp_pct*0.01))
     return sl, tp

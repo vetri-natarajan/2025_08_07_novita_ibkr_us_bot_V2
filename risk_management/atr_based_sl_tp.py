@@ -7,5 +7,6 @@ Purpose:
 def compute_atr_sl_tp(price: float, atr_value: float, k_sl: float = 1.0, k_tp: float = 3.0):
     sl = round(price - (atr_value * k_sl))
     tp = round(price + (atr_value * k_tp))
-    print("Inside sl", sl, tp)
+    #sl = price - (atr_value * k_sl)
+    #tp = price + (atr_value * k_tp)
     return sl, tp

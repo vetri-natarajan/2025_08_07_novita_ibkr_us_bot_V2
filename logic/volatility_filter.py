@@ -54,8 +54,8 @@ def check_MTF_conditions(symbol_combined, symbol, main_settings, ta_settings, ma
     # Extract typed OHLC series for vectorized computations.
     opens, highs, lows, closes = extract_ohlc_as_float(lastN)
 
-    # 1) Volatility filter (per-bar percent range).
-    if not passes_volatility_filter(symbol_combined, symbol, main_settings, highs, lows, logger):
+    # 1) Volatility filter (compared to previous bar range).
+    if not passes_volatility_filter(symbol_combined, symbol, main_settings, closes, logger):
         return False
 
     # 2) Upper wick to body ratio cap.
