@@ -1,5 +1,5 @@
 from ib_async import IB, MarketOrder, StopOrder, LimitOrder
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import asyncio
 import json
 import os
@@ -57,10 +57,108 @@ class order_manager_class:
         self.intraday_scalping_exit_time = config_dict["intraday_scalping_exit_time"]
         self.order_state_folder = Path(order_manager_state_file).parent
         dirctory = ensure_directory(self.order_state_folder, self.logger)
+        self.realized_cash = float(config_dict.get("trading_capital"))
+        self.last_floating_equity: Optional[float] = self.realized_cash
         
         self.logger.info("✅ Order manager initialized successfully")
 
-
+    def set_realized_cash(self, cash_value: float):
+        try:
+            self.realized_cash = cash_value
+        except: 
+            self.logger.warning("could not do the realized cash update")
+     
+    def _last_price(self, symbol: str) -> Optional[float]:
+        """
+            Get the last price
+        """
+        t = self.market_data.tickers.get(symbol)
+        if t is None or t.last in (None, 0):
+            return None
+        
+        return float(t.last)
+ 
+    def compute_unrealized_equity(self) -> tuple:
+        """
+            Compute unrealized pnl using live last prices and udate last_floating_equity
+            
+            1. get positions entry price
+            2. get live data
+            3. compute the pnl
+        """
+        total_unreal = 0
+        
+        for sym, side, qty, entry in self._positions_snapshot():
+            last_price = self._last_price(sym)
+            if last_price is None: 
+                continue
+            if side == "BUY":
+                unreal = (last_price - entry)*qty
+            else: 
+                unreal = (entry - last_price)*qty
+                
+            total_unreal += unreal
+        feq = self.realized_cash + total_unreal
+        
+        self.last_floating_equity = feq
+        self.logger.info(f"🧮 Live Floating equity: {feq:.2f} | Cash: {self.realized_cash:.2f} | Unrealized: {total_unreal:.2f}")
+        return total_unreal, feq
+    
+    def _positions_snapshot(self):
+        """
+        Return list of (symbol, side, qty, entry_price)
+        we are first going to get it via broekr connections else return to the local saved 
+        """
+        snapshot = []
+        try: 
+            positons = self.ib.positions()
+        except Exception as e:
+            positions = []
+        
+        if positions:
+            for p in positions: 
+                sym = getattr(p.contract, "symbol", None)
+                qty = float(p.position or 0)
+                if not sym or qty == 0:
+                    continue
+                side = "BUY" if qty > 0 else "SELL"
+                entry_price = None
+                
+                for rec in self.active_trades.values():
+                    contract = rec.get("contract")
+                    if getattr(contract, 'symbol', None) == sym and rec.get("state") in ("PENDING", "FILLED"):
+                        entry_price = rec.get("fill_price") 
+                        break
+                if entry_price is None:
+                    continue
+                snapshot.append((sym, side, abs(qty), float(entry_price)))
+        
+        else: 
+            for rec in self.active_trades.values():
+                sym = getattr(rec.get("contract"), "symbol", None)
+                qty = float(rec.get("qty", 0))
+                
+                if not sym or qty == 0:
+                    continue
+                
+                side = rec.get("side", "BUY").upper()
+                entry_price = rec.get("fill_price") or rec.get("sl_price")
+                
+                if entry_price is None: 
+                    continue
+                snapshot.append((sym, side, abs(qty), float(entry_price)))
+                
+        
+        return snapshot
+                
+                
+    def get_floating_equity(self) -> float: 
+        """
+            Public access method. Recomputes on demand
+        """
+        _, feq = self.compute_unrealized_equity()
+        
+        return feq
     async def place_market_entry_with_bracket(self, 
                                               symbol_combined,
                                               symbol,
@@ -195,6 +293,16 @@ class order_manager_class:
                     self.logger.info(f"⚠️ Exception in monitor fill: {e}, passing.")
                 record["fill_price"] = fill_price
                 self.logger.info("✅ Parent order filled for %s at price %s", trade_id, fill_price)
+                try:
+                    qty = record.get("qty", 0)
+                    fill_price = record.get("fill_price") or last_price
+                    if fill_price and qty:
+                        est_entry_commission = float(self.config_dict.get("live_commission_slippage_percent", 0.05)) / 100.0
+                        cash_outlay = fill_price * qty * (1.0 + est_entry_commission)
+                        self.realized_cash -= cash_outlay
+                        self.logger.info(f"💳 Debited entry cash ~{cash_outlay:.2f}; cash={self.realized_cash:.2f}")
+                except Exception as e:
+                    self.logger.info(f"cash debit skip: {e}")
                 break
 
         else:
@@ -426,7 +534,18 @@ class order_manager_class:
                     if exit_fill_prices and exit_fill_quantities:
                         total_quantity = sum(exit_fill_quantities)
                         weighted_sum = sum(p * q for p, q in zip(exit_fill_prices, exit_fill_quantities))
-                        avg_exit_price = weighted_sum / total_quantity
+                        avg_exit_price = weighted_sum / total_quantity 
+                        
+                        
+                        try:
+                            if fill_price and avg_exit_price and record.get("qty") is not None:
+                                qty_closed = record.get("qty")  # by this point, position is flat
+                                est_exit_commission = float(self.config_dict.get("live_commission_slippage_percent", 0.05)) / 100.0
+                                proceeds = avg_exit_price * qty_closed * (1.0 - est_exit_commission)
+                                self.realized_cash += proceeds
+                                self.logger.info(f"💳 Credited exit proceeds ~{proceeds:.2f}; cash={self.realized_cash:.2f}")
+                        except Exception as e:
+                            self.logger.info(f"cash credit skip: {e}")
                     else:
                         avg_exit_price = None
                         

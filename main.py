@@ -184,7 +184,9 @@ async def process_trading_signals_cached(symbol_combined, symbol, timeframe, df_
                 last_price = 1382
             elif symbol == "RELIANCE":
                 last_price = 822
-        qty = compute_qty(account_value, percent_of_account_value, trading_units, last_price, vix, logger, vix_threshold, vix_reduction_factor, skip_on_high_vix)
+                
+        floating_equity = order_manager.get_floating_equity()
+        qty = compute_qty(floating_equity, percent_of_account_value, trading_units, last_price, vix, logger, vix_threshold, vix_reduction_factor, skip_on_high_vix)
 
             
         if qty <= 0:
@@ -349,6 +351,7 @@ async def run_live_mode(ib_connector):
     order_manager = order_manager_class(ib, trade_reporter, loss_tracker, order_manager_state_file,
                                         trade_time_out_secs, auto_trade_save_secs, config_dict, watchlist_main_settings, streaming_data, ib_connector, logger)
     await order_manager.load_state(market_data, ib)
+    order_manager.set_realized_cash(float(trading_capital))
     passed, reason = await pre_market.run_checks()
     if not passed:
         logger.error(f"❌ Pre-market checks failed: {reason}")
