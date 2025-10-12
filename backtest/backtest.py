@@ -184,6 +184,8 @@ class BacktestEngine:
             'exit_price': None,
             'exit_time': None,
             'pnl': None,
+            'entry_commission': entry_commission,
+            'exit_commission': None,
             'entry_time': entry_time,
             'profit_taken': False
         }
@@ -216,11 +218,12 @@ class BacktestEngine:
         qty = pos['qty']
         entry_price = pos['entry_price']
         side = pos['side'].upper()
+        entry_commission = pos['entry_commission']
 
         # Realized P&L for this exit leg
         gross_pnl = (price - entry_price) * qty if side == "BUY" else (entry_price - price) * qty
         exit_commission = price * qty * self.commission
-        net_pnl = gross_pnl - exit_commission
+        net_pnl = gross_pnl - exit_commission - entry_commission
 
         # Credit cash proceeds of the exit leg
         proceeds = price * qty - exit_commission
@@ -440,126 +443,132 @@ class BacktestEngine:
                 # 4) For each symbol, compute slices up to t and run logic
                 for symbol_combined, meta in universe.items():
                     in_trade = symbol_combined in self.positions and self.positions[symbol_combined]['qty'] > 0
-
-                    symbol = meta['symbol']
-                    df_LTF = meta['df_LTF']
-                    skip_HTF = meta['skip_HTF']
-                    skip_MTF = meta['skip_MTF']
-                    skip_LTF = meta['skip_LTF']
-                    timeframes = meta['timeframes']
-
-                    # Skip if this symbol has no bar up to current_time_utc yet
-                    if current_time_utc < df_LTF.index[0]:
-                        continue
-
-                    df_LTF_slice = df_LTF.loc[:current_time_local]
-                    if df_LTF_slice.empty:
-                        continue
-
-                    # HTF/MTF aligned up to t
-                    df_HTF_slice = meta['df_HTF'].loc[:current_time_local]
-                    df_MTF_slice = meta['df_MTF'].loc[:current_time_local]
-
-                    self.logger.info(f"📝 tail LTF slice===> \n{df_LTF_slice[['open', 'high', 'low', 'close']].tail(5)}")
-
-                    if df_HTF_slice.empty or df_MTF_slice.empty:
-                        continue
-
-                    data_cache_slice = deepcopy(data_cache)
-                    for symbol_temp, df_dict in data_cache_slice.items():
-                        for tf, df in df_dict.items():
-                            df_dict[tf] = df.loc[:current_time_local]
-
-                    # HTF/MTF gating unless in order_testing
-                    if not self.order_testing:
-                        if not skip_HTF:
-                            okHTF = check_HTF_conditions(symbol_combined, symbol, watchlist_main_settings, meta['ta_settings'], meta['max_look_back'], df_HTF_slice, self.logger)
-                        else:
-                            okHTF = True
-                            self.logger.info(f"⏭️🕰️ Skip HTF enabled — skipping {timeframes[0]} checks for [{symbol_combined}] ✅")
-
-                        if not skip_MTF:
-                            okMTF = check_MTF_conditions(symbol_combined, symbol, watchlist_main_settings, meta['ta_settings'], meta['max_look_back'], df_MTF_slice, self.logger)
-                        else:
-                            okMTF = True
-                            self.logger.info(f"⏭️🕰️ Skip MTF enabled — skipping {timeframes[1]} checks for [{symbol_combined}] ✅")
-
-                        if not skip_HTF and not okHTF:
+                    
+                    if not in_trade: 
+                        symbol = meta['symbol']
+                        df_LTF = meta['df_LTF']
+                        skip_HTF = meta['skip_HTF']
+                        skip_MTF = meta['skip_MTF']
+                        skip_LTF = meta['skip_LTF']
+                        timeframes = meta['timeframes']
+    
+                        # Skip if this symbol has no bar up to current_time_utc yet
+                        if current_time_utc < df_LTF.index[0]:
                             continue
-                        if not skip_MTF and not okMTF:
+    
+                        df_LTF_slice = df_LTF.loc[:current_time_local]
+                        if df_LTF_slice.empty:
                             continue
-
-                        if not skip_LTF:
-                            okLTF = check_LTF_conditions(symbol_combined, symbol, watchlist_main_settings, meta['ta_settings'], meta['max_look_back'], df_LTF_slice, df_HTF_slice, self.logger)
-                        else:
-                            okLTF = True
-                            self.logger.info(f"⏭️🕰️ Skip LTF enabled — skipping {timeframes[2]} checks for [{symbol_combined}] ✅")
-
-                        if not skip_LTF and not okLTF:
-                            self.logger.info("⚠️ LTF checks not okay... continuing")
+    
+                        # HTF/MTF aligned up to t
+                        df_HTF_slice = meta['df_HTF'].loc[:current_time_local]
+                        df_MTF_slice = meta['df_MTF'].loc[:current_time_local]
+    
+                        self.logger.info(f"📝 tail LTF slice===> \n{df_LTF_slice[['open', 'high', 'low', 'close']].tail(5)}")
+    
+                        if df_HTF_slice.empty or df_MTF_slice.empty:
                             continue
-
-                    # Scalping mode cutoff
-                    mode = meta['mode']
-                    if mode == 'scalping':
-                        exit_hour, exit_min = self.intraday_scalping_exit_time.split(':')
-                        exit_time = dt.time(int(exit_hour), int(exit_min))
-                        self.logger.info(f"⏱️ Trade time check — Now: {current_time_local.time()} | Exit scheduled: {exit_time}")
-                        if current_time_local.time() >= exit_time:
-                            continue
-
-                    # Entry signal
-                    sig = check_TA_confluence(symbol_combined, self.ALWAYS_TFS, data_cache_slice, meta['ta_settings'], watchlist_main_settings, self.logger)
-                    if sig and (symbol_combined not in self.positions or self.positions[symbol_combined]['qty'] == 0):
-                        last_price = float(df_LTF_slice['close'].iloc[-1])
-                        vix = self.premarket.get_close_price(self.premarket.vix_df, current_time_local.date())
-
-                        # SIZING CHANGE: use floating equity, not just cash
-                        qty = external_compute_qty(
-                            self.floating_equity,
-                            self.percent_of_account_value,
-                            units=int(self.config_dict.get("trading_units", 5)),
-                            price=last_price,
-                            vix=vix,
-                            logger=self.logger,
-                            vix_threshold=float(self.config_dict.get("vix_threshold", 20)),
-                            vix_reduction_factor=float(self.config_dict.get("vix_reduction_factor", 1)),
-                            skip_on_high_vix=bool(self.config_dict.get("skip_on_high_vix", False)),
-                        )
-                        if qty <= 0:
-                            continue
-
-                        exit_method = meta['exit_method']
-                        sl_in = meta['exit_sl_input']
-                        tp_in = meta['exit_tp_input']
-
-                        # Compute SL/TP
-                        last_price = float(df_LTF_slice['close'].iloc[-1])
-                        if exit_method == "E1":
-                            sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_pct=sl_in, tp_pct=tp_in)
-                            self.logger.info(f"🚀 E1 Fixed Stop Calculated | SL: {sl_price}, TP: {tp_price}")
-                        elif exit_method == "E2":
-                            try:
-                                atr_val = float(calculate_atr(df_LTF_slice, 5).iloc[-1])
-                            except Exception:
-                                atr_val = None
-                            if atr_val is not None:
-                                sl_price, tp_price = compute_atr_sl_tp(last_price, atr_val, k_sl=sl_in, k_tp=tp_in)
-                                self.logger.info(f"🚀 E2 ATR Stop Calculated | ATR: {atr_val}, SL: {sl_price}, TP: {tp_price}")
+    
+                        data_cache_slice = deepcopy(data_cache)
+                        for symbol_temp, df_dict in data_cache_slice.items():
+                            for tf, df in df_dict.items():
+                                df_dict[tf] = df.loc[:current_time_local]
+    
+                        # HTF/MTF gating unless in order_testing
+                        if not self.order_testing:
+                            if not skip_HTF:
+                                okHTF = check_HTF_conditions(symbol_combined, symbol, watchlist_main_settings, meta['ta_settings'], meta['max_look_back'], df_HTF_slice, self.logger)
+                            else:
+                                okHTF = True
+                                self.logger.info(f"⏭️🕰️ Skip HTF enabled — skipping {timeframes[0]} checks for [{symbol_combined}] ✅")
+    
+                            if not skip_MTF:
+                                okMTF = check_MTF_conditions(symbol_combined, symbol, watchlist_main_settings, meta['ta_settings'], meta['max_look_back'], df_MTF_slice, self.logger)
+                            else:
+                                okMTF = True
+                                self.logger.info(f"⏭️🕰️ Skip MTF enabled — skipping {timeframes[1]} checks for [{symbol_combined}] ✅")
+    
+                            if not skip_HTF and not okHTF:
+                                continue
+                            if not skip_MTF and not okMTF:
+                                continue
+    
+                            if not skip_LTF:
+                                okLTF = check_LTF_conditions(symbol_combined, symbol, watchlist_main_settings, meta['ta_settings'], meta['max_look_back'], df_LTF_slice, df_HTF_slice, self.logger)
+                            else:
+                                okLTF = True
+                                self.logger.info(f"⏭️🕰️ Skip LTF enabled — skipping {timeframes[2]} checks for [{symbol_combined}] ✅")
+    
+                            if not skip_LTF and not okLTF:
+                                self.logger.info("⚠️ LTF checks not okay... continuing")
+                                continue
+    
+                        # Scalping mode cutoff
+                        mode = meta['mode']
+                        if mode == 'scalping':
+                            exit_hour, exit_min = self.intraday_scalping_exit_time.split(':')
+                            exit_time = dt.time(int(exit_hour), int(exit_min))
+                            self.logger.info(f"⏱️ Trade time check — Now: {current_time_local.time()} | Exit scheduled: {exit_time}")
+                            if current_time_local.time() >= exit_time:
+                                continue
+    
+                        # Entry signal
+                        sig = check_TA_confluence(symbol_combined, self.ALWAYS_TFS, data_cache_slice, meta['ta_settings'], watchlist_main_settings, self.logger)
+                        if sig and (symbol_combined not in self.positions or self.positions[symbol_combined]['qty'] == 0):
+                            last_price = float(df_LTF_slice['close'].iloc[-1])
+                            vix = self.premarket.get_close_price(self.premarket.vix_df, current_time_local.date())
+    
+                            # SIZING CHANGE: use floating equity, not just cash
+                            qty = external_compute_qty(
+                                self.floating_equity,
+                                self.percent_of_account_value,
+                                units=int(self.config_dict.get("trading_units", 5)),
+                                price=last_price,
+                                vix=vix,
+                                logger=self.logger,
+                                vix_threshold=float(self.config_dict.get("vix_threshold", 20)),
+                                vix_reduction_factor=float(self.config_dict.get("vix_reduction_factor", 1)),
+                                skip_on_high_vix=bool(self.config_dict.get("skip_on_high_vix", False)),
+                            )
+                            if qty <= 0:
+                                continue
+    
+                            exit_method = meta['exit_method']
+                            sl_in = meta['exit_sl_input']
+                            tp_in = meta['exit_tp_input']
+    
+                            # Compute SL/TP
+                            last_price = float(df_LTF_slice['close'].iloc[-1])
+                            if exit_method == "E1":
+                                sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_pct=sl_in, tp_pct=tp_in)
+                                self.logger.info(f"🚀 E1 Fixed Stop Calculated | SL: {sl_price}, TP: {tp_price}")
+                            elif exit_method == "E2":
+                                try:
+                                    atr_val = float(calculate_atr(df_LTF_slice, 5).iloc[-1])
+                                except Exception:
+                                    atr_val = None
+                                if atr_val is not None:
+                                    sl_price, tp_price = compute_atr_sl_tp(last_price, atr_val, k_sl=sl_in, k_tp=tp_in)
+                                    self.logger.info(f"🚀 E2 ATR Stop Calculated | ATR: {atr_val}, SL: {sl_price}, TP: {tp_price}")
+                                else:
+                                    sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_pct=sl_in, tp_pct=tp_in)
+                                    self.logger.info(f"🚀 Default E1 Fixed Stop Calculated | SL: {sl_price}, TP: {tp_price}")
+                            elif exit_method in ['E3', 'E4']:
+                                sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_pct=2, tp_pct=4)
+                                self.logger.info(f"🚀 Initial E1 Fixed Stop Calculated for E3/E4 | SL: {sl_price}, TP: {tp_price}")
                             else:
                                 sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_pct=sl_in, tp_pct=tp_in)
-                                self.logger.info(f"🚀 Default E1 Fixed Stop Calculated | SL: {sl_price}, TP: {tp_price}")
-                        elif exit_method in ['E3', 'E4']:
-                            sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_pct=2, tp_pct=4)
-                            self.logger.info(f"🚀 Initial E1 Fixed Stop Calculated for E3/E4 | SL: {sl_price}, TP: {tp_price}")
-                        else:
-                            sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_pct=sl_in, tp_pct=tp_in)
-
-                        self.enter_trade(
-                            symbol_combined, symbol, last_price, qty, sl_price, tp_price, sig,
-                            entry_time=current_time_utc, side="BUY"
-                        )
-
+    
+                            self.enter_trade(
+                                symbol_combined, symbol, last_price, qty, sl_price, tp_price, sig,
+                                entry_time=current_time_utc, side="BUY"
+                            )
+                            
+                    else: 
+                        df_LTF_slice = df_LTF.loc[:current_time_local]
+                        self.logger.info(
+                            f"📝 Tail LTF slice (H, L, C) ===> \n{df_LTF_slice[['open', 'high', 'low', 'close']].tail(5)}"
+                            )
                     # Exit management
                     if symbol_combined in self.positions and self.positions[symbol_combined]['qty'] > 0:
                         current_price = float(df_LTF_slice['close'].iloc[-1])
@@ -672,7 +681,7 @@ class BacktestEngine:
                     if not df_LTF_slice_tmp.empty:
                         price_lookup[sym_c] = float(df_LTF_slice_tmp['close'].iloc[-1])
                 unreal, feq = self.compute_unrealized_and_equity(price_lookup)
-                self.logger.info(f"🧮 End-bar Floating equity: {feq:.2f} | Cash: {self.account_value:.2f} | Unrealized: {unreal:.2f}")
+                #self.logger.info(f"🧮 End-bar Floating equity: {feq:.2f} | Cash: {self.account_value:.2f} | Unrealized: {unreal:.2f}")
             # End per-day bars
 
         # 5) Finalize
@@ -763,7 +772,11 @@ class BacktestEngine:
             entry_time = entry_dt.strftime('%H:%M:%S') if isinstance(entry_dt, (dt.datetime, pd.Timestamp)) else ''
             exit_date = exit_dt.strftime('%Y-%m-%d') if isinstance(exit_dt, (dt.datetime, pd.Timestamp)) else ''
             exit_time = exit_dt.strftime('%H:%M:%S') if isinstance(exit_dt, (dt.datetime, pd.Timestamp)) else ''
-
+            
+            entry_commission = trade.get('entry_commission', 0.0)
+            exit_commission = trade.get('exit_commission', 0.0)
+            gross_pnl = trade['pnl'] + entry_commission + exit_commission
+            
             row = [
                 symbol,
                 qty,
@@ -774,10 +787,11 @@ class BacktestEngine:
                 exit_date,
                 exit_time,
                 f"{trade['exit_price']:.4f}" if trade['exit_price'] is not None else '',
+                f"{gross_pnl:.4f}", 
+                f"{entry_commission:.4f}",
+                f"{exit_commission:.4f}",
                 f"{trade['pnl']:.4f}",
                 f"{cum_pnl:.4f}",
-                f"{trade.get('entry_commission', 0.0):.4f}",
-                f"{trade.get('exit_commission', 0.0):.4f}",
                 account_value
             ]
             rows.append(row)
@@ -785,20 +799,21 @@ class BacktestEngine:
         with open(filepath, mode='w', newline='') as f:
             writer = csv.writer(f)
             header = [
-                'symbol',
-                'qty',
-                'long/short',
-                'entry_date',
-                'entry_time',
-                'entry_price',
-                'exit_date',
-                'exit_time',
-                'exit_price',
-                'profit/loss',
-                'cum_profit_loss',
-                'entry_commission',
-                'exit_commission',
-                'account_value'  # snapshot after the leg that produced a realized P&L
+                'Symbol',
+                'Qty',
+                'Long/short',
+                'Entry_date',
+                'Entry_time',
+                'Entry_price',
+                'Exit_date',
+                'Exit_time',
+                'Exit_price',
+                'Gross PnL',                
+                'Entry_commission',
+                'Exit_commission',
+                'Net PnL',
+                'Cum_profit_loss',                
+                'Account_value'  # snapshot after the leg that produced a realized P&L
             ]
             writer.writerow(header)
             writer.writerows(rows)
