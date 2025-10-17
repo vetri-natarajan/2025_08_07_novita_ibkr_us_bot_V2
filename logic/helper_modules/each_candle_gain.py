@@ -8,6 +8,6 @@ def check_each_candle_gains(gains, limits, logger):
     """
     gain_within_limits = all((gains > limits[0]) & (gains < limits[1]))
     if not gain_within_limits:
-        logger.info(f"❌ HTF: Gains not in range {limits}")
+        logger.info(f"❌ HTF: Gains not in range {limits} \n gains: \n{gains}")
         return False
     return True

@@ -22,20 +22,15 @@ def resolve_mtf_lookback(symbol_combined, symbol, main_settings, logger):
     Raises:
         ValueError: When the configured higher and medium TFs are not supported.
     """
-    HH_LL_bars = int(main_settings[symbol_combined]['HHLL'])
-    parsed_HTF = main_settings[symbol_combined]["Parsed TF"][0]
-    parsed_MTF = main_settings[symbol_combined]["Parsed TF"][1]
+    
+    
+    try:
+        mtf_look_back = int(main_settings[symbol_combined]['MTF lookback'])
 
-    # Map supported TF pairings to a multiplier on HH_LL_bars.
-    if parsed_HTF == '1 week' and parsed_MTF == '1 day':
-        mtf_look_back = HH_LL_bars * 5  # Approximate trading days in a week
-    elif parsed_HTF == '30 mins' and parsed_MTF == '5 mins':
-        mtf_look_back = HH_LL_bars * 6  # 30m / 5m = 6 bars
-    elif parsed_HTF == '3 mins' and parsed_MTF == '2 mins':
-        mtf_look_back = HH_LL_bars * 5  # Chosen domain rule
-    else:
-        # Preserve original behavior: log and raise on mismatch.
-        logger.info("❌ MTF Higher and medium time frame mismatch detected 🚩")
-        raise ValueError("❌ MTF Higher and medium time frame mismatch detected 🚩")
+    except Exception as e:
+
+        logger.info(f"⚠️ Exception occurred in mtf_lookback: {e}")
+        logger.info("❌ Check MTF Lookback input 🚩")
+        raise ValueError("❌ Check MTF Lookback input  🚩")
 
     return mtf_look_back

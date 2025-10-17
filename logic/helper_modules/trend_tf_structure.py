@@ -1,4 +1,4 @@
-def check_htf_structure(closes, opens, logger):
+def check_htf_structure(opens, closes, logger):
     """
     Check all closes greater than open.
     

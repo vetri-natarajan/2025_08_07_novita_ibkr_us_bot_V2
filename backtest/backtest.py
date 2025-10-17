@@ -218,7 +218,7 @@ class BacktestEngine:
         qty = pos['qty']
         entry_price = pos['entry_price']
         side = pos['side'].upper()
-        entry_commission = pos['entry_commission']
+        entry_commission = price * qty * self.commission
 
         # Realized P&L for this exit leg
         gross_pnl = (price - entry_price) * qty if side == "BUY" else (entry_price - price) * qty
@@ -255,11 +255,12 @@ class BacktestEngine:
 
         entry_price = pos['entry_price']
         side = pos['side'].upper()
+        entry_commission = price * qty_to_exit * self.commission # for partial exits calcualte again with parital qty
         qty_remaining = pos['qty'] - qty_to_exit
 
         gross_pnl = (price - entry_price) * qty_to_exit if side == "BUY" else (entry_price - price) * qty_to_exit
         exit_commission = price * qty_to_exit * self.commission
-        net_pnl = gross_pnl - exit_commission
+        net_pnl = gross_pnl - exit_commission - entry_commission
 
         # Credit proceeds of the partial exit
         proceeds = price * qty_to_exit - exit_commission
@@ -288,7 +289,7 @@ class BacktestEngine:
             'exit_time': time,
             'exit_price': price,
             'pnl': net_pnl,
-            'entry_commission': 0.0,  # entry comm already charged on full qty at entry
+            'entry_commission': entry_commission,  
             'exit_commission': exit_commission,
             'account_value': self.account_value  # snapshot after partial credit
         })
@@ -424,6 +425,7 @@ class BacktestEngine:
                 # Respect trading windows in local time
                 current_time_local = current_time_utc.tz_convert(tz)
                 if not is_time_in_trading_windows(current_time_local.time(), self.config_dict['trading_windows']):
+                    self.logger.info(f"🚫⏰ Current time {current_time_local} is not within the trading windows: {self.config_dict['trading_windows']}")
                     continue
 
                 # Build a price lookup from all available LTF closes up to this bar

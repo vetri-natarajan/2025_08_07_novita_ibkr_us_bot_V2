@@ -1,4 +1,4 @@
-def calculate_gains(closes, opens):
+def calculate_gains(opens, closes):
     """
     Calculates gains
     

@@ -56,7 +56,8 @@ def check_LTF_conditions(symbol_combined, symbol, main_settings, ta_settings, ma
                 return False
     
             vol_confirm_input = main_settings[symbol_combined]['Volume Confirm']
-            if not volume_confirmation(df_LTF, df_HTF, vol_confirm_input, logger):
+            htf_tf =  main_settings[symbol_combined]['Parsed TF'][0]
+            if not volume_confirmation(df_LTF, df_HTF, vol_confirm_input, htf_tf, logger):
                 return False
         
         if entry_decision in ["PULLBACK", "BOTH"]:

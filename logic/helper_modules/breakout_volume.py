@@ -1,6 +1,6 @@
 import pandas as pd
 
-def volume_confirmation(df_LTF, df_HTF, vol_confirm_input, logger):
+def volume_confirmation(df_LTF, df_HTF, vol_confirm_input, htf_tf, logger):
     last_vol = df_LTF['volume'].iloc[-1]
     last_5_vol = df_LTF['volume'].iloc[-6:-1]
     last_5_vol_avg = last_5_vol.mean()
@@ -24,7 +24,31 @@ def volume_confirmation(df_LTF, df_HTF, vol_confirm_input, logger):
     elif vol_confirm_input in ['H', "HIGH"]:
         logger.info(f"tail htf ===> {df_HTF}")
         last_htf_bar_time = df_HTF.index[-1]
-        htf_bar_open_time = last_htf_bar_time - pd.Timedelta(minutes=30)
+        htf_tf_dict = {
+                    
+                    'min': 'min',
+                    'mins' : 'min',  
+                    'hour': 'hours',
+                    'hours': 'hours',
+                    'day': 'days',
+                    'days': 'days',
+                    'week': 'W',
+                    'weeks': 'W',
+                    'month': 'W',
+                    'month': 'W', # no month in timedelta
+                    }
+        
+       
+        htf_value = int(htf_tf.split()[0])
+        htf_raw_unit = htf_tf.split()[1]
+        htf_unit = htf_tf_dict.get(htf_raw_unit)
+        
+        if htf_raw_unit in ['month', 'months']: # no months in time delta
+            logger.warning("⚠️ No month delta is available in pd.Timedelta. 1 month is approximated to 4 weeks.")
+            htf_value = htf_value*4
+        
+        logger.info(f"📊 Volume breakout mode converted time delta values → n: {htf_value}, unit: {htf_unit}")
+        htf_bar_open_time = last_htf_bar_time - pd.Timedelta(htf_value, unit=htf_unit)
 
         tz = df_LTF.index.tz
         if last_htf_bar_time.tzinfo is None:
