@@ -1,20 +1,16 @@
-import numpy as np
-
 def price_breakout_confirm(df_LTF, breakout_level, logger, is_live = False, live_price = None):
-    if df_LTF is None or len(df_LTF) < 1:
-        logger.info("❌ LTF : Dataframe is None or too short")
-        return False
-    if not is_live:
-        last_close = df_LTF['close'].iloc[-1]
+    if not is_live:  #for backtesting
+        current_price = df_LTF['high'].iloc[-1] 
     else:
-        last_close = live_price
-    if last_close is None:
-        logger.info("❌last close is none")
+        current_price = live_price
+          
+    if current_price is None:
+        logger.info("❌last price is none")
     if breakout_level is None:
-        logger.info("❌breakout_levele is none")   
+        logger.info("❌breakout_level is none")   
         
-    price_breakout = last_close > breakout_level
+    price_breakout = current_price > breakout_level
     if not price_breakout:
-        logger.info(f"❌ LTF no breakout last_price: {last_close} breakout_level {breakout_level}")
+        logger.info(f"❌ LTF no breakout current_price: {current_price} breakout_level {breakout_level}")
         return False
     return True

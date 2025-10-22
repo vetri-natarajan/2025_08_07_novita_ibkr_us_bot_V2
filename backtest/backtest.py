@@ -541,6 +541,10 @@ class BacktestEngine:
     
                             # Compute SL/TP
                             last_price = float(df_LTF_slice['close'].iloc[-1])
+                            
+                            
+                            
+                            
                             if exit_method == "E1":
                                 sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_pct=sl_in, tp_pct=tp_in)
                                 self.logger.info(f"🚀 E1 Fixed Stop Calculated | SL: {sl_price}, TP: {tp_price}")

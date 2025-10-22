@@ -61,7 +61,7 @@ def check_LTF_conditions(symbol_combined, symbol, main_settings, ta_settings, ma
                 return False
         
         if entry_decision in ["PULLBACK", "BOTH"]:
-            if not pullback_retest(df_LTF, breakout_level, logger):
+            if not pullback_retest(df_LTF, breakout_level, logger, is_live, live_price):
                 return False
         
         '''
@@ -74,6 +74,7 @@ def check_LTF_conditions(symbol_combined, symbol, main_settings, ta_settings, ma
 
         
     logger.info(f"✅📈 LTF [{symbol_combined}] all conditions are met...")
+    
     return True
 
 
@@ -111,7 +112,7 @@ def check_TA_confluence(symbol, ALWAYS_TFS, data_cache, ta_settings, main_settin
             return False  
         
         else: 
-            import time
+            #import time
             #time.sleep(15)
             #if len(count) > 0:
             logger.info(f"✅ TA Confluence [{symbol}] {timeframe} confluence met")
