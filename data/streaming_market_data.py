@@ -237,6 +237,7 @@ class StreamingData:
 
         try:
             await self.ib_connector.ensure_connected()
+            '''
             bars_raw = await asyncio.get_event_loop().run_in_executor(
                 self.executor,
                 lambda: self.ib.reqHistoricalData(
@@ -247,7 +248,17 @@ class StreamingData:
                     whatToShow='TRADES',
                     useRTH=True
                 )
+            '''
+            bars_raw = await self.ib.reqHistoricalDataAsync(
+                contract,
+                endDateTime='',
+                durationStr=duration_str,
+                barSizeSetting=timeframe,
+                whatToShow='TRADES',
+                useRTH=True
             )
+
+            
         except Exception as e:
             self.logger.error(f"❌ Failed to fetch historical {timeframe} data for {contract.symbol}: {e}")
             return None
