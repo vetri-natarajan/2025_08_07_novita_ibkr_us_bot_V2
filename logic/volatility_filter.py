@@ -44,7 +44,7 @@ def check_MTF_conditions(symbol_combined, symbol, main_settings, ta_settings, ma
         return False
 
     # Compute how many recent bars to consider based on TF pairing rules.
-    mtf_look_back = resolve_mtf_lookback(symbol_combined, symbol, main_settings, logger)
+    mtf_look_back = resolve_mtf_lookback(symbol_combined, main_settings, logger)
 
     # Slice last N bars, excluding the most recent incomplete one by convention.
     logger.info(f"📝 MTF before lastN ====>\n {df_MTF}")

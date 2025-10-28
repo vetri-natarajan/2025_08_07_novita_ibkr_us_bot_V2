@@ -4,7 +4,7 @@ save_data_on_exit = True
 save_history = True
 save_non_project_files = False
 project_type = 'empty-project-type'
-recent_files = ['issues.txt', '_inputs\\inputs.cfg', 'main.py', 'data\\vix_spx.py', 'backtest\\backtest.py', 'strategies\\strategy.py', 'logic\\helper_modules\\pullback.py', 'logic\\helper_modules\\breakout_price.py', 'logic\\helper_modules\\breakout_volume.py']
+recent_files = ['issues.txt', '_inputs\\inputs.cfg', 'main.py', 'backtest\\backtest.py', 'data\\historical_data_fetcher.py', 'data\\streaming_market_data.py', '..\\..\\..\\..\\2024_08_14_john_ibkr_level_program\\fresh_approach\\working_approach\\V64.4_Budgie_GUI_async_num_contracts_setting_back_waiting_order_simulator.py']
 
 [main]
 version = 0.2.0

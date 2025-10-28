@@ -1,2 +1,2 @@
 Symbol,Hi to Lo TF,HHLL,Skip HTF,Skip MTF,Skip LTF,Entry Decision,Mode,Total Gain,Each Gain,MTF lookback,Volatility,Volume Confirm,Max Draw down,Exit,SL,TP
-SBIN,"30m,5m,1m",1,n,n,n,breakout,scalping,~0.01% ? 6.0%,~0.01%/ 2.0%,6,~-2.5%/ 5%,L,6%,E3,1,2
+SBIN,"30m,5m,1m",1,y,n,n,breakout,scalping,~0.01% / 6.00%,~-0.01%/ 2.5%,0,~-2.5%/ 5%,L,6%,E1,1,3

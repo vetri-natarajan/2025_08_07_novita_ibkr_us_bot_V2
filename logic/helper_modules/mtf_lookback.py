@@ -7,7 +7,7 @@ into the number of bars to slice for evaluation.
 """
 
 
-def resolve_mtf_lookback(symbol_combined, symbol, main_settings, logger):
+def resolve_mtf_lookback(symbol_combined, main_settings, logger):
     """
     Compute MTF lookback bars from TF pairing.
 
@@ -20,12 +20,19 @@ def resolve_mtf_lookback(symbol_combined, symbol, main_settings, logger):
         int: Number of bars to look back for MTF checks.
 
     Raises:
-        ValueError: When the configured higher and medium TFs are not supported.
+        ValueError: When the configured higher and medium TFs are not supported or MTF lookback is less than 1
     """
     
     
     try:
         mtf_look_back = int(main_settings[symbol_combined]['MTF lookback'])
+        
+        if mtf_look_back < 1:
+            logger.info("❌ MTF lookback must be greater than 0 🚩")
+            raise ValueError("❌ MTF lookback must be greater than 0  🚩")
+        else: 
+            mtf_look_back = mtf_look_back + 1
+            
 
     except Exception as e:
 

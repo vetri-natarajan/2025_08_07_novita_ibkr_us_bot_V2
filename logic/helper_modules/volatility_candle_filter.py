@@ -27,6 +27,9 @@ def passes_volatility_filter(symbol_combined, symbol, main_settings, closes, log
     # Avoid divide-by-zero; replace 0 lows with NaN then add epsilon to denominator.
     #vol_percent = (highs - lows) * 100.0 / (lows.replace(0, np.nan) + 1e-8)
     vol_percent = (closes - closes.shift(-1)) * 100.0 / (closes.replace(0, np.nan) + 1e-8)
+    vol_percent = vol_percent[:-1] # removing the last nan value since we are shifting one up
+
+    logger.info(f'📈 MTF Volatility Percent:  {vol_percent}')
     
     vol_filters = main_settings[symbol_combined]['Parsed Each Volatility']
     vol_filter_lower = vol_filters[0]
@@ -34,6 +37,7 @@ def passes_volatility_filter(symbol_combined, symbol, main_settings, closes, log
 
     # Strictly within (lower, upper), mirroring original inequalities.
     within = (vol_percent > vol_filter_lower) & (vol_percent < vol_filter_upper)
+    logger.info(f'📈 MTF Volatility within: {within}')
     if not np.all(within.values):
         logger.info(
             f"❌ MTF Volatility is not within the range: {vol_filter_lower} to {vol_filter_upper}"

@@ -8,6 +8,7 @@ def volume_confirmation(df_LTF, df_HTF, vol_confirm_input, htf_tf, logger):
     vol_confirm_input = vol_confirm_input.upper()
     if vol_confirm_input in ['L', "LOW"]:
         vol_confirmation = current_vol > 2.5 * last_5_vol_avg
+        logger.info(f"📊 Volume option: Low Last Volume: {current_vol} | 💥 Breakout Volume: {2.5 * last_5_vol_avg}")
         if not vol_confirmation:
             logger.info(f"❌ LTF No Volume confirmation last_volume: {current_vol} breakout_volume {2.5 * last_5_vol_avg}")
             return False
@@ -17,6 +18,7 @@ def volume_confirmation(df_LTF, df_HTF, vol_confirm_input, htf_tf, logger):
         vwap = calculate_vwap(df_LTF)
         last_vwap = vwap.iloc[-1]
         vol_confirmation = current_vol > last_vwap
+        logger.info(f"📊 Volume option: Moderate current_vol: {current_vol} vwap_volume {last_vwap}")
         if not vol_confirmation:
             logger.info(f"❌ LTF No Volume confirmation current_vol: {current_vol} vwap_volume {last_vwap}")
             return False
@@ -63,7 +65,8 @@ def volume_confirmation(df_LTF, df_HTF, vol_confirm_input, htf_tf, logger):
         highest_ltf_volume = ltf_bars_in_htf['volume'].max()
         current_volume = df_LTF['volume'].iloc[-1]
         vol_confirmation = current_volume > highest_ltf_volume
-
+        
+        logger.info(f"📊 Volume option: High last_volume: {current_volume} highest_ltf_volume: {highest_ltf_volume}")
         if not vol_confirmation:
             logger.info(f"❌ LTF No Volume confirmation last_volume: {current_volume} highest_ltf_volume: {highest_ltf_volume}")
             return False

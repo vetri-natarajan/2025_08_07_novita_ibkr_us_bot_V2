@@ -10,6 +10,7 @@ def price_breakout_confirm(df_LTF, breakout_level, logger, is_live = False, live
         logger.info("❌breakout_level is none")   
         
     price_breakout = current_price > breakout_level
+    logger.info(f"📈 Price Breakout Check → Current: {current_price}, Level: {breakout_level}")
     if not price_breakout:
         logger.info(f"❌ LTF no breakout current_price: {current_price} breakout_level {breakout_level}")
         return False
