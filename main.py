@@ -2,6 +2,7 @@ import asyncio
 import nest_asyncio
 nest_asyncio.apply()
 
+import math
 import logging
 from datetime import datetime
 from ib_async import IB
@@ -136,7 +137,7 @@ async def run_backtest_entrypoint(ib, account_value, ib_connector):
         end_time
     )
 
-async def process_trading_signals_cached(symbol_combined, symbol, timeframe, df_HTF, df_MTF, df_LTF,
+async def process_trading_signals_cached(symbol_combined, symbol, timeframe,  skip_LTF, df_HTF, df_MTF, df_LTF,
                                          streaming_data, order_manager, cfg,
                                          account_value, percent_of_account_value, vix, logger,
                                          watchlist_main_settings, ta_settings,
@@ -158,34 +159,68 @@ async def process_trading_signals_cached(symbol_combined, symbol, timeframe, df_
             live_price = ticker.last
         is_live = True
         
-        okLTF = check_LTF_conditions(symbol_combined, symbol, watchlist_main_settings, ta_settings, max_look_back, df_LTF, df_HTF, logger, order_testing, is_live, live_price)
-        if not okLTF:
-            logger.info(f"⏸️ LTF conditions not met for {symbol_combined}")
-            return False
+        if not skip_LTF: 
+            okLTF = check_LTF_conditions(symbol, symbol_combined, watchlist_main_settings, ta_settings, max_look_back, df_LTF, df_HTF, logger, order_testing, is_live, live_price)
+            if not okLTF:
+                logger.info(f"⏸️ LTF conditions not met for {symbol_combined}")
+                return False
+        else:
+            okLTF = True
         data_cache_symbol = streaming_data._data_cache[symbol]
-        okTA = check_TA_confluence(symbol, ALWAYS_TFS, ta_settings, data_cache_symbol, watchlist_main_settings, logger)
+        
+        #logger.info(f'data_cahe_symbol --->{data_cache_symbol}')
+        
+        okTA = check_TA_confluence(symbol_combined, symbol, ALWAYS_TFS, data_cache_symbol, ta_settings , watchlist_main_settings, logger, is_live)
         
         if not okTA:
             logger.info(f"⏸️ TA confluence conditions not met for {symbol_combined}")
             return False            
         
         ticker = streaming_data.tickers.get(symbol)
-        last_price = None
+        last_price = ticker.last
+        
+        while (isinstance(last_price, float) and math.isnan(last_price)):            
+            logger.info("⚠️ Last Price is NaN — probably this is the first tick... ⏳ Waiting to receive tick.")
+            await asyncio.sleep(0.5)
+            ticker = streaming_data.tickers.get(symbol)
+            last_price = ticker.last
+
+        
+        '''
         if ticker is not None: 
             last_price = ticker.last
         
         else: 
-            last_price = df_LTF['close'].iloc[-1]
+            last_price = df_LTF['close'].iloc[-1]        
+        
+        '''
+
+            
+            
         
         if order_testing:
             if symbol == "INFY":
                 last_price = 1513
             elif symbol == "SBIN":
-                last_price = 1382
+                last_price = 937
             elif symbol == "RELIANCE":
-                last_price = 822
+                last_price = 1487
                 
         floating_equity = order_manager.get_floating_equity()
+        '''
+        logger.info(
+            f"📊 Floating Equity: {floating_equity}\n"
+            f"💰 Percent of Account Value: {percent_of_account_value}\n"
+            f"📈 Trading Units: {trading_units}\n"
+            f"💹 ticker: {ticker}\n"
+            f"💹 Last Price: {last_price}\n"
+            f"🌪️ VIX: {vix}\n"
+            f"⚠️ VIX Threshold: {vix_threshold}\n"
+            f"📉 VIX Reduction Factor: {vix_reduction_factor}\n"
+            f"🚫 Skip on High VIX: {skip_on_high_vix}\n"
+)
+        '''
+
         qty = compute_qty(floating_equity, percent_of_account_value, trading_units, last_price, vix, logger, vix_threshold, vix_reduction_factor, skip_on_high_vix)
 
             
@@ -196,10 +231,11 @@ async def process_trading_signals_cached(symbol_combined, symbol, timeframe, df_
         sl_input = watchlist_main_settings[symbol_combined]['SL']
         tp_input = watchlist_main_settings[symbol_combined]['TP']
         
-        logger.info(f" Computed qty for [{symbol}] qty: {qty}")
+        logger.info(f"🧮 Computed qty for [{symbol}] qty: {qty}")
         special_exit = False # for E3 and E4 exits
         if exit_method == "E1":
             sl_price, tp_price = compute_fixed_sl_tp(last_price, sl_input, tp_input)
+            #logger.info(f'🧾 Initial exit calculation: exit_method {exit_method}, 🛑 sl_price: {sl_price}, 🎯 tp_price: {tp_price}')
         elif exit_method == "E2":
             try:
                 atr_val_df = calculate_atr(df_LTF, 5)
@@ -269,7 +305,7 @@ async def on_bar_handler(symbol, timeframe, df, symbol_combined, streaming_data,
 
         else:        
             htf_signals[symbol_combined] = True            
-            logger.info("⏭️🕰️ Skip HTF enabled — skipping {HTF} checksfor [{symbol_combined}] ✅")
+            logger.info(f"⏭️🕰️ Skip HTF enabled — skipping HTF checksfor [{symbol_combined}] ✅")
         
         signal_htf = htf_signals[symbol_combined]
         
@@ -301,14 +337,14 @@ async def on_bar_handler(symbol, timeframe, df, symbol_combined, streaming_data,
         
         else: 
             mtf_signals[symbol_combined] = True
-            logger.info("⏭️🕰️ Skip MTF enabled — skipping {MTF} checksfor [{symbol_combined}] ✅")
+            logger.info(f"⏭️🕰️ Skip MTF enabled — skipping {MTF} checksfor [{symbol_combined}] ✅")
             
     elif timeframe == LTF:
-        if not skip_LTF:
-            df_HTF = streaming_data.get_latest(symbol, HTF)
-            df_MTF = streaming_data.get_latest(symbol, MTF)
-            df_LTF = df
-            
+        df_HTF = streaming_data.get_latest(symbol, HTF)
+        df_MTF = streaming_data.get_latest(symbol, MTF)
+        df_LTF = df
+        
+        if not skip_LTF:            
             if df_HTF is None and not skip_HTF: 
                 logger.info(f"⏳ HTF data not ready for {symbol_combined}")
                 return
@@ -320,7 +356,7 @@ async def on_bar_handler(symbol, timeframe, df, symbol_combined, streaming_data,
             if df_LTF is None and not skip_LTF: 
                 logger.info(f"⏳ LTF data not ready for {symbol_combined}")
                 return            
-            await process_trading_signals_cached(symbol_combined, symbol, timeframe, df_HTF, df_MTF, df_LTF, streaming_data,
+            await process_trading_signals_cached(symbol_combined, symbol, timeframe,  skip_LTF, df_HTF, df_MTF, df_LTF, streaming_data,
                                                 order_manager, cfg, account_value, percent_of_account_value, vix,
                                                 logger, watchlist_main_settings, ta_settings,
                                                 max_look_back, trading_units=cfg["trading_units"],
@@ -328,7 +364,14 @@ async def on_bar_handler(symbol, timeframe, df, symbol_combined, streaming_data,
                                                 vix_reduction_factor=cfg["vix_reduction_factor"],
                                                 skip_on_high_vix=cfg["skip_on_high_vix"])
         else:
-            logger.info("⏭️🕰️ Skip LTF enabled — skipping {LTF} checksfor [{symbol_combined}] ✅")
+            logger.info(f"⏭️🕰️ Skip LTF enabled — skipping {LTF} checksfor [{symbol_combined}] ✅")
+            await process_trading_signals_cached(symbol_combined, symbol, timeframe, skip_LTF, df_HTF, df_MTF, df_LTF, streaming_data,
+                                                order_manager, cfg, account_value, percent_of_account_value, vix,
+                                                logger, watchlist_main_settings, ta_settings,
+                                                max_look_back, trading_units=cfg["trading_units"],
+                                                vix_threshold=cfg["vix_threshold"],
+                                                vix_reduction_factor=cfg["vix_reduction_factor"],
+                                                skip_on_high_vix=cfg["skip_on_high_vix"])
         
 async def poll_partial_bars(streaming_data: StreamingData, symbol: str, timeframe: str):
     while True:

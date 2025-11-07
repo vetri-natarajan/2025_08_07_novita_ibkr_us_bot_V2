@@ -30,7 +30,10 @@ def compute_qty(account_value: float,
             return 0
         else:
             unit_value = unit_value * vix_reduction_factor
-    qty = math.floor(unit_value / price)
+    if not math.isnan(price): # initial price is nan
+        qty = math.floor(unit_value / price)
+    else:
+        qty = 0
     if qty < 0:
         qty = 0
     return int(qty)

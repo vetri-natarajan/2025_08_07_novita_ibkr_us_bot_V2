@@ -515,7 +515,7 @@ class BacktestEngine:
                                 continue
     
                         # Entry signal
-                        sig = check_TA_confluence(symbol_combined, self.ALWAYS_TFS, data_cache_slice, meta['ta_settings'], watchlist_main_settings, self.logger)
+                        sig = check_TA_confluence(symbol_combined, symbol, self.ALWAYS_TFS, data_cache_slice, meta['ta_settings'], watchlist_main_settings, self.logger)
                         if sig and (symbol_combined not in self.positions or self.positions[symbol_combined]['qty'] == 0):
                             last_price = float(df_LTF_slice['close'].iloc[-1])
                             vix = self.premarket.get_close_price(self.premarket.vix_df, current_time_local.date())
@@ -783,6 +783,8 @@ class BacktestEngine:
             exit_commission = trade.get('exit_commission', 0.0)
             gross_pnl = trade['pnl'] + entry_commission + exit_commission
             
+            trade_value = trade['entry_price']*qty
+            
             row = [
                 symbol,
                 qty,
@@ -793,6 +795,7 @@ class BacktestEngine:
                 exit_date,
                 exit_time,
                 f"{trade['exit_price']:.4f}" if trade['exit_price'] is not None else '',
+                trade_value,
                 f"{gross_pnl:.4f}", 
                 f"{entry_commission:.4f}",
                 f"{exit_commission:.4f}",
@@ -814,6 +817,7 @@ class BacktestEngine:
                 'Exit_date',
                 'Exit_time',
                 'Exit_price',
+                'Trade_value'
                 'Gross PnL',                
                 'Entry_commission',
                 'Exit_commission',

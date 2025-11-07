@@ -111,7 +111,7 @@ class order_manager_class:
         """
         snapshot = []
         try: 
-            positons = self.ib.positions()
+            positions = self.ib.positions()
         except Exception as e:
             positions = []
         
@@ -312,7 +312,7 @@ class order_manager_class:
             await self.save_state()
             return
 
-        exit_method = self.watchlist_main_settings[symbol]['Exit']
+        exit_method = self.watchlist_main_settings[symbol_combined]['Exit']
         qty = record.get("qty")
         entry_price = record.get("fill_price") or record.get("entry_price")
         entry_time = record.get("entry_time") or datetime.datetime.utcnow()
@@ -494,10 +494,15 @@ class order_manager_class:
                 positions = []
     
             still_holding = False
+            #self.logger.info(f"📤 Positions ===> {positions}")
             for pos in positions:
                 if getattr(pos.contract, "symbol", None) == symbol and pos.position != 0:
                     still_holding = True
+                    #self.logger.info(f"📤 Still holdeing {symbol} ===> {pos.position}")
                     break
+                else: 
+                    #self.logger.info(f"NOt 📤 Still holdeing {symbol} ===> {pos.position}")
+                    pass
         
             if still_holding:
                 #self.logger.info(f"⏳ Still holding trade [{symbol}] order_id: {trade_id}")
@@ -519,7 +524,7 @@ class order_manager_class:
                     await self.ib_connector.ensure_connected()
                     trades = self.ib.trades()
                     for trade in trades:
-                        self.logger.info(f"\n\n\ntrade===> {trade}")
+                        #self.logger.info(f"\n\n\ntrade===> {trade}")
                         #temp_id = getattr(trade.fills.OrderId, "OrderId", None)
                         temp_id = trade.order.orderId
                         #self.logger.info(f"\nexit_order_ids====================> {exit_order_ids}")
@@ -1158,7 +1163,7 @@ class order_manager_class:
         await self.save_state()
             
     
-    def has_active_trades_for_symbol(self, symbol: str) -> bool:
+    def has_active_trades_for_symbol(self, symbol_combined: str, symbol: str) -> bool:
         for rec in self.active_trades.values():
             try: 
                 c = rec.get('contract')
