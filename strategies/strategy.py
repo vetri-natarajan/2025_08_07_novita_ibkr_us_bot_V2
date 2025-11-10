@@ -37,6 +37,7 @@ def check_LTF_conditions(symbol_combined, symbol, main_settings, ta_settings, ma
             logger.info("❌ LTF : Dataframe is None or too short")
             return False
     
+        #logger.info(f"Symbol_combined:{symbol_combined} symbol:{symbol}")
         entry_decision = main_settings[symbol_combined]['Entry Decision'].upper()
         if entry_decision not in ["BREAKOUT", "PULLBACK", "BOTH"]:
             logger.info("⚠️ Entry decision input not correct")
@@ -77,7 +78,6 @@ def check_LTF_conditions(symbol_combined, symbol, main_settings, ta_settings, ma
     
     return True
 
-
 def check_TA_confluence( symbol_combined, symbol, ALWAYS_TFS, data_cache, ta_settings, main_settings, logger, is_live = False):
     '''
     1. we need to use the check_technicla_Confluence module
@@ -97,43 +97,51 @@ def check_TA_confluence( symbol_combined, symbol, ALWAYS_TFS, data_cache, ta_set
         '1 min': '1m'
         
         }
+    #logger.info(f'data cache inside ta ===> \n {data_cache}')
     
     for timeframe in ALWAYS_TFS:
         #get the dfs
         
-        timeframe_ = TF_TO_TIMEFRAME[timeframe] 
+        
         if not is_live:
             
-            df_TFs = data_cache.get(symbol)
+            df_TFs = data_cache.get(symbol_combined)
+            #timeframe_ = timeframe
+            #timeframe_key = TF_TO_TIMEFRAME[timeframe] 
         else:
             #timeframe_ = timeframe
             df_TFs = data_cache
-        
+            #timeframe_ = TF_TO_TIMEFRAME[timeframe] 
+            #timeframe_ = timeframe
+            
+        timeframe_key = TF_TO_TIMEFRAME[timeframe]   
+        #logger.info(f'timeframe_===> \n {timeframe_}')
         #logger.info(f'df_TFs in startegy===> \n {df_TFs}')
         #logger.info(f'timeframe_===> \n {TF_TO_TIMEFRAME[timeframe] }')
         
-        try:
-            
-            #logger.info(f'df_tf_ ===> \n {df_TFs[timeframe_][:-1]}')
-            #logger.info(f'df_tf ===> \n {df_TFs[timeframe][:-1]}')
-            df_TF = df_TFs[timeframe][:-1]
-    
-            
-            if not check_technical_confluence(timeframe_, df_TF, ta_settings, main_settings, logger):
-                logger.info(f"⚠️❌ TA Confluence [{symbol}] {timeframe} confluence not met")
-                #import time
-                #time.sleep(15)
-                    
-                return False  
-            
-            else: 
-                #import time
-                #time.sleep(15)
-                #if len(count) > 0:
-                logger.info(f"✅ TA Confluence [{symbol}] {timeframe} confluence met")
+        #try:            
+        #logger.info(f'df_tf_ ===> \n {df_TFs[timeframe_][:-1]}')
+        #logger.info(f'df_tf ===> \n {df_TFs[timeframe][:-1]}')
+        df_TF = df_TFs[timeframe][:-1]
+        logger.info(f'timeframe key===> \n {timeframe_key}')
+        logger.info(f'df_TF in startegy===> \n {df_TF}')
+
         
-        except Exception as e: 
-            logger.info(f"⚠️ Exception occurred in TA confluence check: {e}")
+        if not check_technical_confluence(timeframe_key, df_TF, ta_settings, main_settings, logger):
+            logger.info(f"⚠️❌ TA Confluence [{symbol}] {timeframe} confluence not met")
+            #import time
+            #time.sleep(15)
+                
+            return False  
+        
+        else: 
+            #import time
+            #time.sleep(15)
+            #if len(count) > 0:
+            logger.info(f"✅ TA Confluence [{symbol}] {timeframe} confluence met")
+            
+        #except Exception as e: 
+        #   logger.info(f"⚠️ Exception occurred in TA {timeframe} confluence check: {e}")
         
 
             

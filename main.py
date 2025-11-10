@@ -2,6 +2,7 @@ import asyncio
 import nest_asyncio
 nest_asyncio.apply()
 
+import os
 import math
 import logging
 from datetime import datetime
@@ -117,6 +118,17 @@ async def run_backtest_entrypoint(ib, account_value, ib_connector):
         config_dict=config_dict,
         logger=logger
     )
+    
+    trade_state_file_bt = trade_state_file + "_bakctest"  
+    logger.info(f"🔍 Checking whether previous backtest loss tracker file exists...")
+    if os.path.exists(trade_state_file_bt):
+        os.remove(trade_state_file_bt)
+        logger.info(f"♻️ Removed old backtest loss tracker file {trade_state_file_bt} — starting fresh logging!")
+
+    else: 
+        logger.info(f"🆕 No previous loss tracker file found ({trade_state_file_bt}). Creating a fresh one now.")
+    loss_tracker = loss_tracker_class(loss_halt_count, loss_halt_duration_hours, trade_state_file_bt, logger)
+    
     backtester = BacktestEngine(
         ib,
         ALWAYS_TFS,
@@ -126,6 +138,7 @@ async def run_backtest_entrypoint(ib, account_value, ib_connector):
         config_dict,
         premarket_bt_checker,
         watchlist_main_settings, 
+        loss_tracker,
         logger
     )
     await backtester.run_backtest(
@@ -160,7 +173,7 @@ async def process_trading_signals_cached(symbol_combined, symbol, timeframe,  sk
         is_live = True
         
         if not skip_LTF: 
-            okLTF = check_LTF_conditions(symbol, symbol_combined, watchlist_main_settings, ta_settings, max_look_back, df_LTF, df_HTF, logger, order_testing, is_live, live_price)
+            okLTF = check_LTF_conditions(symbol_combined, symbol, watchlist_main_settings, ta_settings, max_look_back, df_LTF, df_HTF, logger, order_testing, is_live, live_price)
             if not okLTF:
                 logger.info(f"⏸️ LTF conditions not met for {symbol_combined}")
                 return False
@@ -388,7 +401,7 @@ async def run_live_mode(ib_connector):
     account_value = trading_capital
     market_data = MarketData(ib)
     streaming_data = StreamingData(ib, logger, trading_time_zone, ib_connector)
-    loss_tracker = loss_tracker_class(loss_halt_count, loss_halt_duration_hours, trade_state_file)
+    loss_tracker = loss_tracker_class(loss_halt_count, loss_halt_duration_hours, trade_state_file, logger)
     pre_market = pre_market_checks(ib, config_dict, loss_tracker, vix_symbol, spx_symbol, ib_connector,  logger)
     trade_reporter = trade_reporter_class(trade_reporter_file, logger)
     order_manager = order_manager_class(ib, trade_reporter, loss_tracker, order_manager_state_file,

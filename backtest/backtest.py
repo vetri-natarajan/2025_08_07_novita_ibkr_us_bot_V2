@@ -92,7 +92,7 @@ class PreMarketChecksBacktest:
 
 class BacktestEngine:
 
-    def __init__(self, ib, ALWAYS_TFS, watchlist, account_value, data_fetcher, config_dict, premarket, watchlist_main_settings, logger, commission=0.0005):
+    def __init__(self, ib, ALWAYS_TFS, watchlist, account_value, data_fetcher, config_dict, premarket, watchlist_main_settings, loss_tracker, logger, commission=0.0005):
         self.ib = ib
         self.ALWAYS_TFS = ALWAYS_TFS
         self.watchlist = watchlist
@@ -116,6 +116,8 @@ class BacktestEngine:
         # Equity tracking for reports
         self.starting_equity = float(account_value)
         self.ending_equity = float(account_value)
+        
+        self.losstracker = loss_tracker #loss_tracker_class instance
         self.logger.info("🛠️ Initialized BacktestEngine")  
 
     def start_backtest_logging(self, backtest_log_path):
@@ -158,6 +160,10 @@ class BacktestEngine:
         return total_unreal, floating_equity  
 
     def enter_trade(self, symbol_combined, symbol, price, qty, sl_price, tp_price, signal, entry_time, side="BUY"):
+        if self.losstracker.is_halted(entry_time):
+            self.logger.info(f"⛔ Trading halted due to loss limit rule. Skipping entry for {symbol_combined}.")
+            return
+        
         if symbol_combined in self.positions and self.positions[symbol_combined]['qty'] != 0:
             self.logger.info(f"Already have active position on {symbol}, skipping entry")
             return
@@ -217,6 +223,7 @@ class BacktestEngine:
         pos = self.positions[symbol_combined]
         qty = pos['qty']
         entry_price = pos['entry_price']
+        entry_time = pos['entry_time']
         side = pos['side'].upper()
         entry_commission = price * qty * self.commission
 
@@ -224,6 +231,10 @@ class BacktestEngine:
         gross_pnl = (price - entry_price) * qty if side == "BUY" else (entry_price - price) * qty
         exit_commission = price * qty * self.commission
         net_pnl = gross_pnl - exit_commission - entry_commission
+        
+        if net_pnl is not None: 
+            self.logger.info("🧾 Adding trade result to loss tracker.")
+            self.losstracker.add_trade_result(net_pnl > 0, entry_time)
 
         # Credit cash proceeds of the exit leg
         proceeds = price * qty - exit_commission
@@ -254,6 +265,7 @@ class BacktestEngine:
             qty_to_exit = pos['qty']
 
         entry_price = pos['entry_price']
+        entry_time = pos['entry_time']
         side = pos['side'].upper()
         entry_commission = price * qty_to_exit * self.commission # for partial exits calcualte again with parital qty
         qty_remaining = pos['qty'] - qty_to_exit
@@ -261,6 +273,10 @@ class BacktestEngine:
         gross_pnl = (price - entry_price) * qty_to_exit if side == "BUY" else (entry_price - price) * qty_to_exit
         exit_commission = price * qty_to_exit * self.commission
         net_pnl = gross_pnl - exit_commission - entry_commission
+        
+        if net_pnl is not None: 
+            self.logger.info("🧾 Adding trade result to loss tracker.")
+            self.losstracker.add_trade_result(net_pnl > 0, entry_time)
 
         # Credit proceeds of the partial exit
         proceeds = price * qty_to_exit - exit_commission
@@ -475,7 +491,7 @@ class BacktestEngine:
                         for symbol_temp, df_dict in data_cache_slice.items():
                             for tf, df in df_dict.items():
                                 df_dict[tf] = df.loc[:current_time_local]
-    
+                        #self.logger.info(f"data_cache_slice: {data_cache_slice}")
                         # HTF/MTF gating unless in order_testing
                         if not self.order_testing:
                             if not skip_HTF:
@@ -515,7 +531,7 @@ class BacktestEngine:
                                 continue
     
                         # Entry signal
-                        sig = check_TA_confluence(symbol_combined, symbol, self.ALWAYS_TFS, data_cache_slice, meta['ta_settings'], watchlist_main_settings, self.logger)
+                        sig = check_TA_confluence(symbol_combined, symbol, self.ALWAYS_TFS, data_cache_slice, meta['ta_settings'], watchlist_main_settings, self.logger, is_live=False)
                         if sig and (symbol_combined not in self.positions or self.positions[symbol_combined]['qty'] == 0):
                             last_price = float(df_LTF_slice['close'].iloc[-1])
                             vix = self.premarket.get_close_price(self.premarket.vix_df, current_time_local.date())
@@ -817,7 +833,7 @@ class BacktestEngine:
                 'Exit_date',
                 'Exit_time',
                 'Exit_price',
-                'Trade_value'
+                'Trade_value',
                 'Gross PnL',                
                 'Entry_commission',
                 'Exit_commission',
