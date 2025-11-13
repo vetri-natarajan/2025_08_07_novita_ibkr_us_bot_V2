@@ -46,12 +46,14 @@ class pre_market_checks:
         if not ok:
             return False, f"Config validation failed{msg}"
         
-        
+        '''
         #2. loss tracker
         self.logger.info("🔍 Checking whether trading is halted ⛔️⏸️...")
         if self.loss_tracker_class.is_halted():
             untill = self.loss_tracker_class.halted_until()
             return False, f"Trading halted due to consecutive losses until{untill}"
+        '''
+
         #3. vix related
         self.logger.info("📊 Getting VIX and SPY data for Rule of 16 analysis... ⚡️📈")
         try: 

@@ -47,9 +47,9 @@ def check_MTF_conditions(symbol_combined, symbol, main_settings, ta_settings, ma
     mtf_look_back = resolve_mtf_lookback(symbol_combined, main_settings, logger)
 
     # Slice last N bars, excluding the most recent incomplete one by convention.
-    logger.info(f"📝 MTF before lastN ====>\n {df_MTF}")
+    logger.info(f"📝 MTF before lastN [{symbol_combined}]====>\n {df_MTF}")
     lastN = df_MTF.iloc[-(mtf_look_back + 1): -1].copy()
-    logger.info(f"MTF lastN====>\n {lastN}")
+    logger.info(f"MTF lastN [{symbol_combined}] ====>\n {lastN}")
 
     # Extract typed OHLC series for vectorized computations.
     opens, highs, lows, closes = extract_ohlc_as_float(lastN)

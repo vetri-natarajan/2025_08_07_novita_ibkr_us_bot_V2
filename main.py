@@ -157,6 +157,8 @@ async def process_trading_signals_cached(symbol_combined, symbol, timeframe,  sk
                                          max_look_back, trading_units,
                                          vix_threshold, vix_reduction_factor,
                                          skip_on_high_vix):
+
+    
     current_time = datetime.now().time()  
     if (is_time_in_trading_windows(current_time, trading_windows)) or test_run:
     
@@ -301,6 +303,15 @@ async def process_trading_signals_cached(symbol_combined, symbol, timeframe,  sk
         logger.info(f"⏰ current_time {current_time} not in trading windows {trading_windows} 🚫")
 
 async def on_bar_handler(symbol, timeframe, df, symbol_combined, streaming_data, ta_settings, mode, max_look_back, order_manager, cfg, account_value, vix, logger):
+    
+    # checking trading window
+    logger.info("⏰ Checking the trade window timings... 🕒🔍")
+    if not test_run:
+        current_time = datetime.now().time()  
+        if not is_time_in_trading_windows(current_time, trading_windows):
+            logger.info(f"🚫 not checking for entry signals ⏰ Current time {current_time} not in 📊 trading windows {trading_windows}")
+            return    
+    
     HTF, MTF, LTF = watchlist_main_settings[symbol_combined]['Parsed TF']
     skip_HTF = watchlist_main_settings[symbol_combined]['Skip HTF'].strip().upper() in ['Y', 'YES', 'TRUE', '1' ]
     skip_MTF = watchlist_main_settings[symbol_combined]['Skip MTF'].strip().upper() in ['Y', 'YES', 'TRUE', '1' ]

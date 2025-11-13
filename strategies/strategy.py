@@ -123,8 +123,8 @@ def check_TA_confluence( symbol_combined, symbol, ALWAYS_TFS, data_cache, ta_set
         #logger.info(f'df_tf_ ===> \n {df_TFs[timeframe_][:-1]}')
         #logger.info(f'df_tf ===> \n {df_TFs[timeframe][:-1]}')
         df_TF = df_TFs[timeframe][:-1]
-        logger.info(f'timeframe key===> \n {timeframe_key}')
-        logger.info(f'df_TF in startegy===> \n {df_TF}')
+        #logger.info(f'timeframe key===> \n {timeframe_key}')
+        #logger.info(f'df_TF in startegy===> \n {df_TF}')
 
         
         if not check_technical_confluence(timeframe_key, df_TF, ta_settings, main_settings, logger):
@@ -141,14 +141,6 @@ def check_TA_confluence( symbol_combined, symbol, ALWAYS_TFS, data_cache, ta_set
             logger.info(f"✅ TA Confluence [{symbol}] {timeframe} confluence met")
             
         #except Exception as e: 
-        #   logger.info(f"⚠️ Exception occurred in TA {timeframe} confluence check: {e}")
-        
-
-            
-       
-
-    
-
-        
+        #   logger.info(f"⚠️ Exception occurred in TA {timeframe} confluence check: {e}")    
     
     return True

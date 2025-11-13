@@ -21,9 +21,9 @@ def check_HTF_conditions(symbol_combined, symbol, main_settings, ta_settings, ma
     if df_HTF is None or len(df_HTF) < (HH_LL_bars + 1):
         logger.info("❌ HTF: Dataframe is None or too short")
         return False
-    logger.info(f"➡️ dt HTF  ====>\n {df_HTF}")
+    logger.info(f"➡️ dt HTF [{symbol_combined}]  ====>\n {df_HTF}")
     lastN = df_HTF.iloc[-HH_LL_bars-1:-1].copy()
-    logger.info(f"➡️ HTF lastN ====>\n {lastN}")
+    logger.info(f"➡️ HTF lastN [{symbol_combined}] ====>\n {lastN}")
 
     
     # Extract typed OHLC series for vectorized computations.

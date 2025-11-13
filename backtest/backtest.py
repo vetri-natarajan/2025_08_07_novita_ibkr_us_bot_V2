@@ -438,11 +438,7 @@ class BacktestEngine:
             day_times = global_time_index[day_mask]
 
             for current_time_utc in tqdm(day_times, desc=f"Bars {current_day_local.date()}", position=1, leave=False):
-                # Respect trading windows in local time
                 current_time_local = current_time_utc.tz_convert(tz)
-                if not is_time_in_trading_windows(current_time_local.time(), self.config_dict['trading_windows']):
-                    self.logger.info(f"🚫⏰ Current time {current_time_local} is not within the trading windows: {self.config_dict['trading_windows']}")
-                    continue
 
                 # Build a price lookup from all available LTF closes up to this bar
                 price_lookup = {}
@@ -461,14 +457,21 @@ class BacktestEngine:
                 # 4) For each symbol, compute slices up to t and run logic
                 for symbol_combined, meta in universe.items():
                     in_trade = symbol_combined in self.positions and self.positions[symbol_combined]['qty'] > 0
+                    symbol = meta['symbol']
+                    df_LTF = meta['df_LTF']
+                    skip_HTF = meta['skip_HTF']
+                    skip_MTF = meta['skip_MTF']
+                    skip_LTF = meta['skip_LTF']
+                    timeframes = meta['timeframes']
                     
                     if not in_trade: 
-                        symbol = meta['symbol']
-                        df_LTF = meta['df_LTF']
-                        skip_HTF = meta['skip_HTF']
-                        skip_MTF = meta['skip_MTF']
-                        skip_LTF = meta['skip_LTF']
-                        timeframes = meta['timeframes']
+                        
+                        # Respect trading windows in local time
+                        current_time_local = current_time_utc.tz_convert(tz)
+                        if not is_time_in_trading_windows(current_time_local.time(), self.config_dict['trading_windows']):
+                            self.logger.info(f"🚫⏰ Current time {current_time_local} is not within the trading windows: {self.config_dict['trading_windows']}")
+                            continue
+
     
                         # Skip if this symbol has no bar up to current_time_utc yet
                         if current_time_utc < df_LTF.index[0]:
@@ -482,7 +485,7 @@ class BacktestEngine:
                         df_HTF_slice = meta['df_HTF'].loc[:current_time_local]
                         df_MTF_slice = meta['df_MTF'].loc[:current_time_local]
     
-                        self.logger.info(f"📝 tail LTF slice===> \n{df_LTF_slice[['open', 'high', 'low', 'close']].tail(5)}")
+                        self.logger.info(f"📝 tail LTF slice [{symbol_combined}]===> \n{df_LTF_slice[['open', 'high', 'low', 'close']].tail(5)}")
     
                         if df_HTF_slice.empty or df_MTF_slice.empty:
                             continue
@@ -589,109 +592,109 @@ class BacktestEngine:
                     else: 
                         df_LTF_slice = df_LTF.loc[:current_time_local]
                         self.logger.info(
-                            f"📝 Tail LTF slice (H, L, C) ===> \n{df_LTF_slice[['open', 'high', 'low', 'close']].tail(5)}"
+                            f"📝 Tail LTF slice (H, L, C) [{symbol_combined}]===> \n{df_LTF_slice[['open', 'high', 'low', 'close']].tail(5)}"
                             )
-                    # Exit management
-                    if symbol_combined in self.positions and self.positions[symbol_combined]['qty'] > 0:
-                        current_price = float(df_LTF_slice['close'].iloc[-1])
-                        current_low = float(df_LTF_slice['low'].iloc[-1])
-                        current_high = float(df_LTF_slice['high'].iloc[-1])
-
-                        entry_price = self.positions[symbol_combined]['entry_price']
-                        entry_time = self.positions[symbol_combined]['entry_time']
-                        side = self.positions[symbol_combined]['side'].upper()
-
-                        record = {
-                            "qty": self.positions[symbol_combined]['qty'],
-                            "profit_taken": self.positions[symbol_combined].get("profit_taken", False)
-                        }
-
-                        exit_method = meta['exit_method']
-                        mode = meta['mode']
-
-                        self.logger.info(
-                            f"📌 Already in trade... ⏰ {current_time_utc} ===> [{symbol_combined}] 💰 Entry: {entry_price} | 🕒 Time: {entry_time} | 🚪 Exit method: {exit_method}"
-                        )
-
-                        if exit_method == "E3":
-                            res = compute_dynamic_sl_swing(entry_price, current_price, record)
-                            sl_price = res['stop_loss']
-                            if sl_price > self.positions[symbol_combined]['sl_price']:
-                                self.positions[symbol_combined]['sl_price'] = sl_price
-                            if current_low <= sl_price:
-                                self.logger.info(f"🛑 SL triggered — Stoploss {sl_price}")
-                                self.exit_trade(symbol_combined, symbol, sl_price, current_time_utc)
-                                continue
-
-                            if current_high >= res["target_70"] and not record.get("profit_taken", False):
-                                qty_to_exit = int(record["qty"] * 0.7)
-                                if qty_to_exit > 0:
-                                    self.logger.info(f"🎯 Partial Exit — 9% First target reached | Target: {res['target_70']}")
-                                    self.exit_trade_partial(symbol_combined, symbol, res["target_70"], current_time_utc, qty_to_exit)
-                                    self.positions[symbol_combined]["profit_taken"] = True
-
-                            if current_high >= res["target_30"]:
-                                if self.positions[symbol_combined]['qty'] > 0:
-                                    self.logger.info(f"🎯 Partial Exit — 12% Second target reached | Target: {res['target_30']}")
-                                    self.exit_trade(symbol_combined, symbol, res["target_30"], current_time_utc)
-                                    continue
-
-                        if exit_method == "E4":
-                            vwap_series = calculate_vwap(df_LTF_slice)
-                            vwap = vwap_series.iloc[-1] if not vwap_series.empty else None
-                            res = compute_hedge_exit_trade(entry_price, current_price, vwap, entry_time, current_time_utc)
-                            sl_price = res['stop_loss']
-                            tp_price = res['tp_price']
-                            self.logger.info(f"🧮 Calculating dynamic stop loss — 📊 VWAP: {vwap} | 🛑 SL: {sl_price} | 🎯 TP: {tp_price}")
-
-                            if sl_price > self.positions[symbol_combined]['sl_price']:
-                                self.positions[symbol_combined]['sl_price'] = sl_price
-
-                            sl_reached = current_low <= sl_price
-                            tp_reached = current_high >= tp_price
-                            auto_close_reached = res['auto_close']
-
-                            if sl_reached or tp_reached or auto_close_reached:
-                                exit_price = None
-                                if sl_reached:
+                        # Exit management
+                        if symbol_combined in self.positions and self.positions[symbol_combined]['qty'] > 0:
+                            current_price = float(df_LTF_slice['close'].iloc[-1])
+                            current_low = float(df_LTF_slice['low'].iloc[-1])
+                            current_high = float(df_LTF_slice['high'].iloc[-1])
+    
+                            entry_price = self.positions[symbol_combined]['entry_price']
+                            entry_time = self.positions[symbol_combined]['entry_time']
+                            side = self.positions[symbol_combined]['side'].upper()
+    
+                            record = {
+                                "qty": self.positions[symbol_combined]['qty'],
+                                "profit_taken": self.positions[symbol_combined].get("profit_taken", False)
+                            }
+    
+                            exit_method = meta['exit_method']
+                            mode = meta['mode']
+    
+                            self.logger.info(
+                                f"📌 Already in trade... ⏰ {current_time_utc} ===> [{symbol_combined}] 💰 Entry: {entry_price} | 🕒 Time: {entry_time} | 🚪 Exit method: {exit_method}"
+                            )
+    
+                            if exit_method == "E3":
+                                res = compute_dynamic_sl_swing(entry_price, current_price, record)
+                                sl_price = res['stop_loss']
+                                if sl_price > self.positions[symbol_combined]['sl_price']:
+                                    self.positions[symbol_combined]['sl_price'] = sl_price
+                                if current_low <= sl_price:
                                     self.logger.info(f"🛑 SL triggered — Stoploss {sl_price}")
-                                    exit_price = sl_price
-                                elif tp_reached:
-                                    self.logger.info(f"🎯 Target reached | Target: {tp_price}")
-                                    exit_price = tp_price
-                                elif auto_close_reached:
-                                    self.logger.info(f"🚨 Max holding period reached — Closing at {current_price}")
-                                    exit_price = current_price
-                                self.exit_trade(symbol_combined, symbol, exit_price, current_time_utc)
-                                continue
-
-                        if mode == 'scalping':
-                            exit_hour, exit_min = self.intraday_scalping_exit_time.split(':')
-                            exit_time = dt.time(int(exit_hour), int(exit_min))
-                            self.logger.info(f"⏱️ Trade time check — Now: {current_time_local.time()} | Exit scheduled: {exit_time}")
-                            if current_time_local.time() >= exit_time:
-                                self.logger.info(
-                                    f"⏰ Time-based Exit triggered ===> 📉 Current: {current_price}"
-                                )
-                                self.exit_trade(symbol_combined, symbol, current_price, current_time_utc)
-                                continue
-                            else:
-                                self.logger.info("⏱️ Time exit condition not satisfied")
-
-                        if exit_method in ["E1", "E2"]:  # E1/E2 fixed/ATR
-                            sl_price = self.positions[symbol_combined]['sl_price']
-                            tp_price = self.positions[symbol_combined]['tp_price']
-                            if side == "BUY":
-                                exit_price = None
-                                if current_low <= sl_price or current_high >= tp_price:
-                                    if current_low <= sl_price:
+                                    self.exit_trade(symbol_combined, symbol, sl_price, current_time_utc)
+                                    continue
+    
+                                if current_high >= res["target_70"] and not record.get("profit_taken", False):
+                                    qty_to_exit = int(record["qty"] * 0.7)
+                                    if qty_to_exit > 0:
+                                        self.logger.info(f"🎯 Partial Exit — 9% First target reached | Target: {res['target_70']}")
+                                        self.exit_trade_partial(symbol_combined, symbol, res["target_70"], current_time_utc, qty_to_exit)
+                                        self.positions[symbol_combined]["profit_taken"] = True
+    
+                                if current_high >= res["target_30"]:
+                                    if self.positions[symbol_combined]['qty'] > 0:
+                                        self.logger.info(f"🎯 Partial Exit — 12% Second target reached | Target: {res['target_30']}")
+                                        self.exit_trade(symbol_combined, symbol, res["target_30"], current_time_utc)
+                                        continue
+    
+                            if exit_method == "E4":
+                                vwap_series = calculate_vwap(df_LTF_slice)
+                                vwap = vwap_series.iloc[-1] if not vwap_series.empty else None
+                                res = compute_hedge_exit_trade(entry_price, current_price, vwap, entry_time, current_time_utc)
+                                sl_price = res['stop_loss']
+                                tp_price = res['tp_price']
+                                self.logger.info(f"🧮 Calculating dynamic stop loss — 📊 VWAP: {vwap} | 🛑 SL: {sl_price} | 🎯 TP: {tp_price}")
+    
+                                if sl_price > self.positions[symbol_combined]['sl_price']:
+                                    self.positions[symbol_combined]['sl_price'] = sl_price
+    
+                                sl_reached = current_low <= sl_price
+                                tp_reached = current_high >= tp_price
+                                auto_close_reached = res['auto_close']
+    
+                                if sl_reached or tp_reached or auto_close_reached:
+                                    exit_price = None
+                                    if sl_reached:
                                         self.logger.info(f"🛑 SL triggered — Stoploss {sl_price}")
                                         exit_price = sl_price
-                                    elif current_high >= tp_price:
+                                    elif tp_reached:
                                         self.logger.info(f"🎯 Target reached | Target: {tp_price}")
                                         exit_price = tp_price
+                                    elif auto_close_reached:
+                                        self.logger.info(f"🚨 Max holding period reached — Closing at {current_price}")
+                                        exit_price = current_price
                                     self.exit_trade(symbol_combined, symbol, exit_price, current_time_utc)
-                    # End per-symbol
+                                    continue
+    
+                            if mode == 'scalping':
+                                exit_hour, exit_min = self.intraday_scalping_exit_time.split(':')
+                                exit_time = dt.time(int(exit_hour), int(exit_min))
+                                self.logger.info(f"⏱️ Trade time check — Now: {current_time_local.time()} | Exit scheduled: {exit_time}")
+                                if current_time_local.time() >= exit_time:
+                                    self.logger.info(
+                                        f"⏰ Time-based Exit triggered ===> 📉 Current: {current_price}"
+                                    )
+                                    self.exit_trade(symbol_combined, symbol, current_price, current_time_utc)
+                                    continue
+                                else:
+                                    self.logger.info("⏱️ Time exit condition not satisfied")
+    
+                            if exit_method in ["E1", "E2"]:  # E1/E2 fixed/ATR
+                                sl_price = self.positions[symbol_combined]['sl_price']
+                                tp_price = self.positions[symbol_combined]['tp_price']
+                                if side == "BUY":
+                                    exit_price = None
+                                    if current_low <= sl_price or current_high >= tp_price:
+                                        if current_low <= sl_price:
+                                            self.logger.info(f"🛑 SL triggered | Current low: {current_low} Stoploss {sl_price}")
+                                            exit_price = sl_price
+                                        elif current_high >= tp_price:
+                                            self.logger.info(f"🎯 Target reached | Current high: {current_high} | Target: {tp_price}")
+                                            exit_price = tp_price
+                                        self.exit_trade(symbol_combined, symbol, exit_price, current_time_utc)
+                        # End per-symbol
 
                 # After handling entries/exits at this bar, recompute floating equity for logs (optional)
                 price_lookup = {}

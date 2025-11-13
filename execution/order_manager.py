@@ -175,10 +175,17 @@ class order_manager_class:
                                               ):
         if qty <= 0: 
             self.logger.warning("⚠️ Quantity <= 0, skipping order placement")
-            return None            
+            return None      
+        
+        self.logger.info("🔍 Checking whether trading is halted ⛔️⏸️...")
+        if self.loss_tracker_class.is_halted():
+            untill = self.loss_tracker_class.halted_until()
+            return False, f"Trading halted due to consecutive losses until{untill}"
         
         if order_testing:
             qty = 1
+            
+        
             
         parent = MarketOrder('BUY', qty)
         parent.orderId = self.ib.client.getReqId()
