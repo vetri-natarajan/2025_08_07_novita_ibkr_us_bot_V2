@@ -119,7 +119,7 @@ async def run_backtest_entrypoint(ib, account_value, ib_connector):
         logger=logger
     )
     
-    trade_state_file_bt = trade_state_file + "_bakctest"  
+    trade_state_file_bt = trade_state_file + "_backtest"  
     logger.info(f"🔍 Checking whether previous backtest loss tracker file exists...")
     if os.path.exists(trade_state_file_bt):
         os.remove(trade_state_file_bt)

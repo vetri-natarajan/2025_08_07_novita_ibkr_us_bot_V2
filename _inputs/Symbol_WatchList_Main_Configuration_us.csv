@@ -1,0 +1,4 @@
+Symbol,Hi to Lo TF,HHLL,Skip HTF,Skip MTF,Skip LTF,Entry Decision,Mode,Total Gain,Each Gain,MTF lookback,Volatility,Volume Confirm,Max Draw down,Exit,SL,TP
+GOOG,"30m,5m,1m",3,n,y,n,breakout,swing,~0.01% / 3.50%,~0.01% / 3.50%,6,~-2.5%/ 5%,L,6%,E1,1,3
+COKE,"30m,5m,1m",3,n,y,n,breakout,swing,~0.01% / 3.50%,~0.01% / 3.50%,6,~-2.5%/ 5%,L,6%,E1,1,3
+MSFT,"30m,5m,1m",3,n,y,n,breakout,swing,~0.01% / 3.50%,~0.01% / 3.50%,6,~-2.5%/ 5%,L,6%,E1,1,3
